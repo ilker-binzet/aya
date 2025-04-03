@@ -1,12 +1,16 @@
 import types from 'licia/types'
 import uuid from 'licia/uuid'
 import { Client } from '@devicefarmer/adbkit'
-import { handleEvent, resolveUnpack } from '../util'
+import { handleEvent, resolveUnpack } from 'share/main/lib/util'
 import singleton from 'licia/singleton'
 import wire from '../wire'
 import waitUntil from 'licia/waitUntil'
 import { getDeviceStore, setDeviceStore, shell } from './base'
 import contain from 'licia/contain'
+import log from 'share/common/log'
+import { IpcGetPackageInfos } from '../../../common/types'
+
+const logger = log('server')
 
 let client: Client
 
@@ -37,6 +41,7 @@ class AyaClient {
     })
   }
   private async connect(tryStart = true) {
+    logger.info('connect')
     try {
       const device = client.getDevice(this.deviceId)
       const socket = await device.openLocal('localabstract:aya')
@@ -65,15 +70,7 @@ class AyaClient {
       if (tryStart) {
         await this.push()
         await this.start()
-        let started = false
-        await waitUntil(
-          () => {
-            this.isRunning().then((val) => (started = val))
-            return started
-          },
-          10000,
-          1000
-        )
+        await waitUntil(this.isRunning, 10000, 100)
         await this.connect(false)
       }
     }
@@ -83,6 +80,7 @@ class AyaClient {
     return contain(result, '@aya')
   })
   private async push() {
+    logger.info('push')
     const device = client.getDevice(this.deviceId)
     await device.push(
       resolveUnpack('server/aya.dex'),
@@ -90,6 +88,7 @@ class AyaClient {
     )
   }
   private async start() {
+    logger.info('start')
     const device = client.getDevice(this.deviceId)
     await device.shell(
       'CLASSPATH=/data/local/tmp/aya/aya.dex app_process /system/bin io.liriliri.aya.Server'
@@ -97,7 +96,7 @@ class AyaClient {
   }
 }
 
-async function getAyaClient(deviceId: string) {
+async function getAyaClient(deviceId: string): Promise<AyaClient> {
   let ayaClient = getDeviceStore(deviceId, 'ayaClient')
   if (!ayaClient) {
     ayaClient = new AyaClient(deviceId)
@@ -106,9 +105,9 @@ async function getAyaClient(deviceId: string) {
   return ayaClient
 }
 
-const getPackageInfos = singleton(async function (
-  deviceId: string,
-  packageNames: string[]
+const getPackageInfos: IpcGetPackageInfos = singleton(async function (
+  deviceId,
+  packageNames
 ) {
   const client = await getAyaClient(deviceId)
   const result: any = await client.sendMessage('getPackageInfos', {

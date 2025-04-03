@@ -7,57 +7,85 @@ import Process from './components/process/Process'
 import Performance from './components/performance/Performance'
 import Webview from './components/webview/Webview'
 import Application from './components/application/Application'
+import File from './components/file/File'
+import Layout from './components/layout/Layout'
 import Style from './App.module.scss'
 import LunaModal from 'luna-modal/react'
+import Modal from 'luna-modal'
 import { t } from '../../common/util'
 import { useState, useEffect, PropsWithChildren, FC } from 'react'
 import { createPortal } from 'react-dom'
 import store from './store'
 import { observer } from 'mobx-react-lite'
-import icon from '../assets/img/icon.png'
+import icon from '../assets/icon.png'
 
 export default observer(function App() {
   const [aboutVisible, setAboutVisible] = useState(false)
 
   useEffect(() => {
-    const showAbout = () => setAboutVisible(true)
-    const offShowAbout = main.on('showAbout', showAbout)
+    const offShowAbout = main.on('showAbout', () => setAboutVisible(true))
+    const offUpdateError = main.on('updateError', () => {
+      Modal.alert(t('updateErr'))
+    })
+    const offUpdateNotAvailable = main.on('updateNotAvailable', () => {
+      Modal.alert(t('updateNotAvailable'))
+    })
+    const offUpdateAvailable = main.on('updateAvailable', async () => {
+      const result = await Modal.confirm(t('updateAvailable'))
+      if (result) {
+        main.openExternal('https://aya.liriliri.io')
+      }
+    })
     return () => {
       offShowAbout()
+      offUpdateError()
+      offUpdateNotAvailable()
+      offUpdateAvailable()
     }
   }, [])
 
   return (
     <>
       <Toolbar />
-      <div className={Style.workspace}>
-        <div className={Style.panels} key={store.device ? store.device.id : ''}>
-          <Panel panel="overview">
-            <Overview />
-          </Panel>
-          <Panel panel="application">
-            <Application />
-          </Panel>
-          <Panel panel="screenshot">
-            <Screenshot />
-          </Panel>
-          <Panel panel="logcat">
-            <Logcat />
-          </Panel>
-          <Panel panel="shell">
-            <Shell />
-          </Panel>
-          <Panel panel="process">
-            <Process />
-          </Panel>
-          <Panel panel="performance">
-            <Performance />
-          </Panel>
-          <Panel panel="webview">
-            <Webview />
-          </Panel>
+      {store.isInit && (
+        <div className={Style.workspace}>
+          <div
+            className={Style.panels}
+            key={store.device ? store.device.id : ''}
+          >
+            <Panel panel="overview">
+              <Overview />
+            </Panel>
+            <Panel panel="application">
+              <Application />
+            </Panel>
+            <Panel panel="screenshot">
+              <Screenshot />
+            </Panel>
+            <Panel panel="logcat">
+              <Logcat />
+            </Panel>
+            <Panel panel="shell">
+              <Shell />
+            </Panel>
+            <Panel panel="process">
+              <Process />
+            </Panel>
+            <Panel panel="performance">
+              <Performance />
+            </Panel>
+            <Panel panel="webview">
+              <Webview />
+            </Panel>
+            <Panel panel="file">
+              <File />
+            </Panel>
+            <Panel panel="layout">
+              <Layout />
+            </Panel>
+          </div>
         </div>
-      </div>
+      )}
       {createPortal(
         <LunaModal
           title={t('aboutAya')}

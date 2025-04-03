@@ -16,9 +16,10 @@ import { useEffect, useRef, useState } from 'react'
 import store from '../../store'
 import copy from 'licia/copy'
 import download from 'licia/download'
+import toStr from 'licia/toStr'
 import { t } from '../../../../common/util'
-import ToolbarIcon from '../../../components/ToolbarIcon'
-import contextMenu from '../../../lib/contextMenu'
+import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
+import contextMenu from 'share/renderer/lib/contextMenu'
 
 export default observer(function Logcat() {
   const [view, setView] = useState<'compact' | 'standard'>('standard')
@@ -165,7 +166,7 @@ export default observer(function Logcat() {
         <LunaToolbarSelect
           keyName="priority"
           disabled={!device}
-          value="2"
+          value={toStr(filter.priority || 2)}
           options={{
             VERBOSE: '2',
             DEBUG: '3',
@@ -243,7 +244,7 @@ export default observer(function Logcat() {
       </LunaToolbar>
       <LunaLogcat
         className="panel-body"
-        maxNum={2000}
+        maxNum={10000}
         filter={filter}
         wrapLongLines={softWrap}
         onContextMenu={onContextMenu}

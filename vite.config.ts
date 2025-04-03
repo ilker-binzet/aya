@@ -35,9 +35,13 @@ export default defineConfig(async (): Promise<UserConfig> => {
     define: {
       AYA_VERSION: JSON.stringify(pkg.version),
     },
-    // @ts-ignore
-    test: {
-      environment: 'jsdom',
+    optimizeDeps: {
+      exclude: ['@yume-chan/pcm-player'],
+    },
+    resolve: {
+      alias: {
+        share: path.resolve(__dirname, 'src/share'),
+      },
     },
   }
 })

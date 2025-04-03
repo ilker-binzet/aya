@@ -10,7 +10,7 @@ const config = {
   },
   files: ['main', 'preload', 'renderer', 'adb', 'server'],
   asarUnpack: ['adb/**/*', 'server/**/*'],
-  artifactName: '${name}-${version}-${os}-${arch}.${ext}',
+  artifactName: '${productName}-${version}-${os}-${arch}.${ext}',
   nsis: {
     allowToChangeInstallationDirectory: true,
     oneClick: false,
@@ -25,6 +25,11 @@ const config = {
   },
   mac: {
     electronLanguages: ['zh_CN', 'en'],
+  },
+  publish: {
+    provider: 'generic',
+    url: 'https://release.liriliri.io/',
+    channel: '${productName}-latest',
   },
 }
 

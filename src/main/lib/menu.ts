@@ -1,11 +1,13 @@
 import { Menu, MenuItemConstructorOptions, app, shell } from 'electron'
-import * as window from '../lib/window'
-import * as terminal from '../window/terminal'
+import * as window from 'share/main/lib/window'
+import * as terminal from 'share/main/window/terminal'
 import isMac from 'licia/isMac'
 import { t } from '../../common/util'
 import upperCase from 'licia/upperCase'
 import isWindows from 'licia/isWindows'
-import { handleEvent } from './util'
+import * as updater from 'share/main/lib/updater'
+import { handleEvent } from 'share/main/lib/util'
+import * as language from 'share/main/lib/language'
 
 function getTemplate(): MenuItemConstructorOptions[] {
   const hideMenu = isMac
@@ -35,6 +37,12 @@ function getTemplate(): MenuItemConstructorOptions[] {
         label: t('aboutAya'),
         click() {
           window.sendTo('main', 'showAbout')
+        },
+      },
+      {
+        label: `${t('checkUpdate')}...`,
+        click() {
+          updater.checkUpdate()
         },
       },
       ...hideMenu,
@@ -93,6 +101,26 @@ function getTemplate(): MenuItemConstructorOptions[] {
     label: t('help'),
     submenu: [
       {
+        label: t('documentation'),
+        click() {
+          shell.openExternal(
+            `https://aya.liriliri.io/${
+              language.get() === 'zh-CN' ? 'zh/' : ''
+            }guide/`
+          )
+        },
+      },
+      {
+        label: t('donate'),
+        click() {
+          const link =
+            language.get() === 'zh-CN'
+              ? 'http://surunzi.com/wechatpay.html'
+              : 'https://ko-fi.com/surunzi'
+          shell.openExternal(link)
+        },
+      },
+      {
         label: t('reportIssue'),
         click() {
           shell.openExternal('https://github.com/liriliri/aya/issues')
@@ -112,7 +140,7 @@ function getTemplate(): MenuItemConstructorOptions[] {
   if (isMac) {
     template.unshift(aya, edit)
   } else {
-    template.push(aya)
+    template.unshift(aya)
   }
 
   return template

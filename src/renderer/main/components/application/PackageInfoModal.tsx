@@ -2,30 +2,17 @@ import LunaModal from 'luna-modal/react'
 import { createPortal } from 'react-dom'
 import { t } from '../../../../common/util'
 import Style from './PackageInfoModal.module.scss'
-import defaultIcon from '../../../assets/img/default-icon.png'
+import defaultIcon from '../../../assets/default-icon.png'
 import fileSize from 'licia/fileSize'
 import md5 from 'licia/md5'
 import convertBin from 'licia/convertBin'
 import dateFormat from 'licia/dateFormat'
+import { IModalProps } from 'share/common/types'
+import { Copyable } from '../common/Copyable'
+import { IPackageInfo } from '../../../../common/types'
 
-interface IProps {
-  visible: boolean
+interface IProps extends IModalProps {
   packageInfo: IPackageInfo
-  onClose: () => void
-}
-
-interface IPackageInfo {
-  icon: string
-  label: string
-  packageName: string
-  versionName: string
-  apkSize: number
-  system: boolean
-  firstInstallTime: number
-  lastUpdateTime: number
-  minSdkVersion?: number
-  targetSdkVersion?: number
-  signatures: string[]
 }
 
 export default function PackageInfoModal(props: IProps) {
@@ -46,8 +33,12 @@ export default function PackageInfoModal(props: IProps) {
         </div>
         <div className={Style.basic}>
           <div className={Style.label}>{packageInfo.label}</div>
-          <div className={Style.packageName}>{packageInfo.packageName}</div>
-          <div className={Style.versionName}>{packageInfo.versionName}</div>
+          <Copyable className={Style.packageName}>
+            {packageInfo.packageName}
+          </Copyable>
+          <Copyable className={Style.versionName}>
+            {packageInfo.versionName}
+          </Copyable>
         </div>
       </div>
       {item(t('sysPackage'), packageInfo.system ? t('yes') : t('no'))}
@@ -67,6 +58,11 @@ export default function PackageInfoModal(props: IProps) {
         dateFormat(new Date(packageInfo.lastUpdateTime), 'yyyy-mm-dd HH:MM:ss')
       )}
       {item(t('apkSize'), fileSize(packageInfo.apkSize))}
+      {packageInfo.appSize && item(t('appSize'), fileSize(packageInfo.appSize))}
+      {packageInfo.dataSize &&
+        item(t('dataSize'), fileSize(packageInfo.dataSize))}
+      {packageInfo.cacheSize &&
+        item(t('cacheSize'), fileSize(packageInfo.cacheSize))}
       {signature &&
         item(t('signature') + ' MD5', md5(convertBin(signature, 'Unit8Array')))}
     </LunaModal>,
@@ -78,7 +74,7 @@ function item(title: string, value: string | number) {
   return (
     <div className={Style.item}>
       <span>{title}</span>
-      <span className={Style.value}>{value}</span>
+      <Copyable className={Style.value}>{value}</Copyable>
     </div>
   )
 }

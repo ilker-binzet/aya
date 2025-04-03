@@ -50,11 +50,11 @@
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  padding: #{theme.$padding-s-m}px 0;
+  padding: #{theme.$padding-x-s}px 0;
 }
 
 .item + .item {
-  border-top: 1px solid var(--aya-color-border);
+  border-top: 1px solid var(--color-border);
 }
 
 .value {
@@ -64,5 +64,4 @@
   overflow: hidden;
   text-overflow: ellipsis;
   padding-left: 20px;
-  user-select: text;
 }

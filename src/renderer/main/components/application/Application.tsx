@@ -6,14 +6,17 @@ import LunaToolbar, {
   LunaToolbarText,
 } from 'luna-toolbar/react'
 import LunaIconList from 'luna-icon-list/react'
+import LunaDataGrid from 'luna-data-grid/react'
 import isEmpty from 'licia/isEmpty'
+import isNull from 'licia/isNull'
 import Style from './Application.module.scss'
 import { observer } from 'mobx-react-lite'
 import { useEffect, useRef, useState } from 'react'
 import store from '../../store'
-import { PannelLoading } from '../../../components/loading'
-import ToolbarIcon from '../../../components/ToolbarIcon'
-import { notify, isFileDrop } from '../../../lib/util'
+import { PannelLoading } from '../common/loading'
+import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
+import { installPackages } from '../../../lib/util'
+import { notify, isFileDrop } from 'share/renderer/lib/util'
 import { t } from '../../../../common/util'
 import className from 'licia/className'
 import endWith from 'licia/endWith'
@@ -21,17 +24,23 @@ import find from 'licia/find'
 import chunk from 'licia/chunk'
 import map from 'licia/map'
 import concat from 'licia/concat'
+import clone from 'licia/clone'
 import LunaModal from 'luna-modal'
+import findIdx from 'licia/findIdx'
 import PackageInfoModal from './PackageInfoModal'
-import defaultIcon from '../../../assets/img/default-icon.png'
-import contextMenu from '../../../lib/contextMenu'
+import { IPackageInfo } from '../../../../common/types'
+import defaultIcon from '../../../assets/default-icon.png'
+import contextMenu from 'share/renderer/lib/contextMenu'
+import dateFormat from 'licia/dateFormat'
+import toEl from 'licia/toEl'
 
 export default observer(function Application() {
   const [isLoading, setIsLoading] = useState(false)
-  const [packageInfo, setPackageInfo] = useState<any>({})
-  const [packageInfos, setPackageInfos] = useState<any[]>([])
+  const [packageInfo, setPackageInfo] = useState<IPackageInfo | null>(null)
+  const [packageInfos, setPackageInfos] = useState<IPackageInfo[]>([])
   const [filter, setFilter] = useState('')
   const [dropHighlight, setDropHighlight] = useState(false)
+  const [listHeight, setListHeight] = useState(0)
   const [packageInfoModalVisible, setPackageInfoModalVisible] = useState(false)
   const [isOpenEffectAnimating, setIsOpenEffectAnimating] = useState(false)
   const [openEffectStyle, setOpenEffectStyle] = useState({
@@ -40,51 +49,89 @@ export default observer(function Application() {
     width: 0,
     height: 0,
   })
-  const dragging = useRef(0)
-  const icons = useRef<any[]>([])
+  const draggingRef = useRef(0)
+  const iconsRef = useRef<any[]>([])
 
   const { device } = store
 
   useEffect(() => {
     refresh()
+
+    function resize() {
+      const height = window.innerHeight - 89
+      setListHeight(height)
+    }
+    resize()
+
+    window.addEventListener('resize', resize)
+
+    return () => {
+      window.removeEventListener('resize', resize)
+    }
   }, [])
 
-  async function refresh() {
+  async function refresh(packageName?: string) {
     if (!device || isLoading) {
       return
     }
-    setPackageInfos([])
-    setIsLoading(true)
-    const packages = await main.getPackages(
-      device.id,
-      store.application.sysPackage
-    )
-    const chunks = chunk(packages, 50)
-    let packageInfos: any[] = []
-    for (let i = 0, len = chunks.length; i < len; i++) {
-      const chunk = chunks[i]
-      packageInfos = concat(
-        packageInfos,
-        await main.getPackageInfos(device.id, chunk)
+    if (!packageName) {
+      setPackageInfos([])
+      setIsLoading(true)
+      const packages = await main.getPackages(
+        device.id,
+        store.application.sysPackage
       )
-      icons.current = map(packageInfos, (info) => {
+      const chunks = chunk(packages, 50)
+      let packageInfos: any[] = []
+      for (let i = 0, len = chunks.length; i < len; i++) {
+        const chunk = chunks[i]
+        packageInfos = concat(
+          packageInfos,
+          await main.getPackageInfos(device.id, chunk)
+        )
+        iconsRef.current = map(packageInfos, (info) => {
+          const style: any = {
+            borderRadius: '20%',
+          }
+          if (!info.enabled) {
+            style.filter = 'grayscale(100%)'
+          }
+
+          return {
+            info: info,
+            src: info.icon || defaultIcon,
+            name: info.label,
+            style,
+          }
+        })
+        setPackageInfos(packageInfos)
+      }
+      setIsLoading(false)
+    } else {
+      const idx = findIdx(
+        packageInfos,
+        (info) => info.packageName === packageName
+      )
+      if (idx !== -1) {
+        const infos = await main.getPackageInfos(device.id, [packageName])
+        const info = infos[0]
+        packageInfos[idx] = info
         const style: any = {
           borderRadius: '20%',
         }
         if (!info.enabled) {
           style.filter = 'grayscale(100%)'
         }
-
-        return {
+        iconsRef.current[idx] = {
           info: info,
           src: info.icon || defaultIcon,
           name: info.label,
           style,
         }
-      })
-      setPackageInfos(packageInfos)
+        iconsRef.current = clone(iconsRef.current)
+        setPackageInfos(clone(packageInfos))
+      }
     }
-    setIsLoading(false)
   }
 
   async function onDrop(e: React.DragEvent) {
@@ -99,40 +146,17 @@ export default observer(function Application() {
       }
       apkPaths.push(path)
     }
-    await installPackages(apkPaths)
+    await install(apkPaths)
   }
 
-  async function installPackages(apkPaths?: string[]) {
-    if (!apkPaths) {
-      const { filePaths } = await main.showOpenDialog({
-        properties: ['openFile', 'multiSelections'],
-        filters: [{ name: 'apk file', extensions: ['apk'] }],
-      })
-      if (isEmpty(filePaths)) {
-        return
-      }
-      apkPaths = filePaths
-    }
-
-    let hasSuccess = false
-    for (let i = 0, len = apkPaths!.length; i < len; i++) {
-      const apkPath = apkPaths![i]
-      notify(t('packageInstalling', { path: apkPath }), { icon: 'info' })
-      try {
-        await main.installPackage(device!.id, apkPath!)
-        hasSuccess = true
-        // eslint-disable-next-line
-      } catch (e) {
-        notify(t('installPackageErr'), { icon: 'error' })
-      }
-    }
-
-    if (hasSuccess) {
-      await refresh()
+  async function install(apkPaths?: string[]) {
+    const result = await installPackages(device!.id, apkPaths)
+    if (result) {
+      refresh()
     }
   }
 
-  function onShowInfo(packageName: string) {
+  function showInfo(packageName: string) {
     const packageInfo = find(
       packageInfos,
       (info) => info.packageName === packageName
@@ -162,14 +186,14 @@ export default observer(function Application() {
     }
   }
 
-  function onContextMenu(e: PointerEvent, info: any) {
+  function onContextMenu(e: PointerEvent, info: IPackageInfo) {
     const device = store.device!
 
     const template: any[] = [
       {
         label: t('packageInfo'),
         click() {
-          onShowInfo(info.packageName)
+          showInfo(info.packageName)
         },
       },
       {
@@ -217,7 +241,7 @@ export default observer(function Application() {
           )
           if (result) {
             await main.disablePackage(device.id, info.packageName)
-            refresh()
+            refresh(info.packageName)
           }
         },
       },
@@ -225,7 +249,7 @@ export default observer(function Application() {
         label: t('enablePackage'),
         click: async () => {
           await main.enablePackage(device.id, info.packageName)
-          refresh()
+          refresh(info.packageName)
         },
       },
       {
@@ -240,6 +264,7 @@ export default observer(function Application() {
           if (result) {
             await main.clearPackage(device.id, info.packageName)
             notify(t('dataCleared'), { icon: 'success' })
+            setTimeout(() => refresh(info.packageName), 1000)
           }
         },
       },
@@ -262,13 +287,17 @@ export default observer(function Application() {
 
   const applications = (
     <div
+      className={Style.applications}
+      style={{
+        overflowY: store.application.listView ? 'hidden' : 'auto',
+      }}
       onDrop={onDrop}
       onDragEnter={() => {
-        dragging.current++
+        draggingRef.current++
       }}
       onDragLeave={() => {
-        dragging.current--
-        if (dragging.current === 0) {
+        draggingRef.current--
+        if (draggingRef.current === 0) {
           setDropHighlight(false)
         }
       }}
@@ -280,32 +309,73 @@ export default observer(function Application() {
         setDropHighlight(true)
       }}
     >
-      <LunaIconList
-        icons={icons.current}
-        size={store.application.itemSize}
-        selectable={false}
-        filter={filter}
-        onClick={(e: any, icon) => {
-          const info = (icon.data as any).info
-          onShowInfo(info.packageName)
-        }}
-        onDoubleClick={(e: any, icon) => {
-          const info = (icon.data as any).info
-          const container: HTMLElement = icon.container
-          const clientRect = container.getBoundingClientRect()
-          setOpenEffectStyle({
-            left: clientRect.left,
-            top: clientRect.top - 60,
-            width: clientRect.width,
-            height: clientRect.width,
-          })
-          open(info.packageName)
-          setIsOpenEffectAnimating(true)
-        }}
-        onContextMenu={(e: any, icon) => {
-          onContextMenu(e, (icon.data as any).info)
-        }}
-      />
+      {store.application.listView ? (
+        <LunaDataGrid
+          onClick={(e: any, node) => {
+            showInfo((node.data as any).packageName)
+          }}
+          onDoubleClick={(e: any, node) => {
+            open((node.data as any).packageName)
+          }}
+          onContextMenu={(e: any, node) => {
+            onContextMenu(e, (node.data as any).info)
+          }}
+          filter={filter}
+          columns={columns}
+          data={map(packageInfos, (info: IPackageInfo) => {
+            return {
+              info,
+              label: toEl(
+                `<span><img src="${info.icon || defaultIcon}" />${
+                  info.label
+                }</span>`
+              ),
+              packageName: info.packageName,
+              versionName: info.versionName,
+              minSdkVersion: info.minSdkVersion,
+              targetSdkVersion: info.targetSdkVersion,
+              firstInstallTime: dateFormat(
+                new Date(info.firstInstallTime),
+                'yyyy-mm-dd HH:MM:ss'
+              ),
+              lastUpdateTime: dateFormat(
+                new Date(info.lastUpdateTime),
+                'yyyy-mm-dd HH:MM:ss'
+              ),
+            }
+          })}
+          minHeight={listHeight}
+          maxHeight={listHeight}
+          selectable={true}
+          uniqueId="packageName"
+        />
+      ) : (
+        <LunaIconList
+          icons={iconsRef.current}
+          size={store.application.itemSize}
+          filter={filter}
+          onClick={(e: any, icon) => {
+            const info = (icon.data as any).info
+            showInfo(info.packageName)
+          }}
+          onDoubleClick={(e: any, icon) => {
+            const info = (icon.data as any).info
+            const container: HTMLElement = icon.container
+            const clientRect = container.getBoundingClientRect()
+            setOpenEffectStyle({
+              left: clientRect.left,
+              top: clientRect.top - 60,
+              width: clientRect.width,
+              height: clientRect.width,
+            })
+            open(info.packageName)
+            setIsOpenEffectAnimating(true)
+          }}
+          onContextMenu={(e: any, icon) => {
+            onContextMenu(e, (icon.data as any).info)
+          }}
+        />
+      )}
       <div
         className={className({
           [Style.openEffect]: true,
@@ -344,14 +414,18 @@ export default observer(function Application() {
         <ToolbarIcon
           icon="add"
           title={t('install')}
-          onClick={() => installPackages()}
+          onClick={() => install()}
           disabled={!device}
         />
         <LunaToolbarSeparator />
         <ToolbarIcon
           icon="zoom-in"
           title={t('zoomIn')}
-          disabled={store.application.itemSize > 256 || isEmpty(packageInfos)}
+          disabled={
+            store.application.listView ||
+            store.application.itemSize > 256 ||
+            isEmpty(packageInfos)
+          }
           onClick={() => {
             const itemSize = Math.round(store.application.itemSize * 1.2)
             store.application.set('itemSize', itemSize)
@@ -360,7 +434,11 @@ export default observer(function Application() {
         <ToolbarIcon
           icon="zoom-out"
           title={t('zoomOut')}
-          disabled={store.application.itemSize < 32 || isEmpty(packageInfos)}
+          disabled={
+            store.application.listView ||
+            store.application.itemSize < 32 ||
+            isEmpty(packageInfos)
+          }
           onClick={() => {
             const itemSize = Math.round(store.application.itemSize * 0.8)
             store.application.set('itemSize', itemSize)
@@ -368,10 +446,31 @@ export default observer(function Application() {
         />
         <LunaToolbarSeparator />
         <ToolbarIcon
+          icon="grid"
+          title={t('iconView')}
+          state={store.application.listView ? '' : 'hover'}
+          onClick={() => {
+            if (store.application.listView) {
+              store.application.set('listView', false)
+            }
+          }}
+        />
+        <ToolbarIcon
+          icon="list"
+          title={t('listView')}
+          state={store.application.listView ? 'hover' : ''}
+          onClick={() => {
+            if (!store.application.listView) {
+              store.application.set('listView', true)
+            }
+          }}
+        />
+        <LunaToolbarSeparator />
+        <ToolbarIcon
           icon="refresh"
           title={t('refresh')}
           disabled={isLoading || !device}
-          onClick={refresh}
+          onClick={() => refresh()}
         />
       </LunaToolbar>
       <div
@@ -381,7 +480,7 @@ export default observer(function Application() {
       >
         {isLoading && isEmpty(packageInfos) ? <PannelLoading /> : applications}
       </div>
-      {!isEmpty(packageInfo) && (
+      {!isNull(packageInfo) && (
         <PackageInfoModal
           packageInfo={packageInfo}
           visible={packageInfoModalVisible}
@@ -391,3 +490,48 @@ export default observer(function Application() {
     </div>
   )
 })
+
+const columns = [
+  {
+    id: 'label',
+    title: t('name'),
+    sortable: true,
+    weight: 20,
+  },
+  {
+    id: 'packageName',
+    title: t('package'),
+    sortable: true,
+    weight: 20,
+  },
+  {
+    id: 'versionName',
+    title: t('version'),
+    sortable: true,
+    weight: 10,
+  },
+  {
+    id: 'minSdkVersion',
+    title: t('minSdkVersion'),
+    sortable: true,
+    weight: 10,
+  },
+  {
+    id: 'targetSdkVersion',
+    title: t('targetSdkVersion'),
+    sortable: true,
+    weight: 10,
+  },
+  {
+    id: 'firstInstallTime',
+    title: t('firstInstallTime'),
+    sortable: true,
+    weight: 15,
+  },
+  {
+    id: 'lastUpdateTime',
+    title: t('lastUpdateTime'),
+    sortable: true,
+    weight: 15,
+  },
+]

@@ -1,11 +1,13 @@
 import I18n from 'licia/I18n'
 import defaults from 'licia/defaults'
 import types from 'licia/types'
-import enUS from '../common/langs/en-US.json'
-import arIQ from '../common/langs/ar-IQ.json'
-import ruRU from '../common/langs/ru-RU.json'
-import zhCN from '../common/langs/zh-CN.json'
-import trTR from '../common/langs/tr-TR.json'
+import enUS from './langs/en-US.json'
+import arIQ from './langs/ar-IQ.json'
+import ruRU from './langs/ru-RU.json'
+import zhCN from './langs/zh-CN.json'
+import trTR from './langs/tr-TR.json'
+import zhTW from './langs/zh-TW.json'
+import frFR from './langs/fr-FR.json'
 
 const langs = {
   'en-US': enUS,
@@ -13,6 +15,8 @@ const langs = {
   'ru-RU': defaults(ruRU, enUS),
   'zh-CN': defaults(zhCN, enUS),
   'tr-TR': defaults(trTR, enUS),
+  'zh-TW': defaults(zhTW, enUS),
+  'fr-FR': defaults(frFR, enUS),
 }
 
 export const i18n = new I18n('en-US', langs)
@@ -23,9 +27,4 @@ export function hasLocale(locale: string) {
 
 export function t(path: string | string[], data?: types.PlainObj<any>) {
   return i18n.t(path, data)
-}
-
-export function isDev() {
-  // @ts-ignore
-  return import.meta.env.MODE === 'development'
 }

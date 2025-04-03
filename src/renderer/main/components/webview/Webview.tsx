@@ -12,7 +12,7 @@ import LunaDataGrid from 'luna-data-grid/react'
 import map from 'licia/map'
 import className from 'licia/className'
 import store from '../../store'
-import ToolbarIcon from '../../../components/ToolbarIcon'
+import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
 
 export default observer(function Webview() {
   const [webviews, setWebviews] = useState<any[]>([])
@@ -102,7 +102,7 @@ export default observer(function Webview() {
           disabled={selected === null}
           icon="debug"
           title={t('inspect')}
-          onClick={() => main.openExternal(selected.devtoolsFrontendUrl)}
+          onClick={() => main.openWindow(selected.devtoolsFrontendUrl)}
         />
         <ToolbarIcon
           disabled={selected === null}

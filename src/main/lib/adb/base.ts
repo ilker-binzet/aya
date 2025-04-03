@@ -9,6 +9,10 @@ import getPort from 'licia/getPort'
 import toNum from 'licia/toNum'
 import types from 'licia/types'
 import isStr from 'licia/isStr'
+import log from 'share/common/log'
+import { handleEvent } from 'share/main/lib/util'
+
+const logger = log('adbBase')
 
 let client: Client
 
@@ -90,6 +94,9 @@ export const getProcesses = singleton(async (deviceId: string) => {
 
 export async function init(c: Client) {
   client = c
+
+  handleEvent('reverseTcp', reverseTcp)
+  handleEvent('getProcesses', getProcesses)
 }
 
 export async function shell(deviceId: string, cmd: string): Promise<string>
@@ -98,6 +105,8 @@ export async function shell(
   deviceId: string,
   cmd: string | string[]
 ): Promise<string | string[]> {
+  logger.debug('shell', cmd)
+
   const device = await client.getDevice(deviceId)
   const cmds: string[] = isStr(cmd) ? [cmd] : cmd
 
@@ -125,6 +134,24 @@ export async function forwardTcp(deviceId: string, remote: string) {
   const port = await getPort()
   const local = `tcp:${port}`
   await device.forward(local, remote)
+
+  return port
+}
+
+export async function reverseTcp(deviceId: string, remote: string) {
+  const device = await client.getDevice(deviceId)
+  const reverses = await device.listReverses()
+
+  for (let i = 0, len = reverses.length; i < len; i++) {
+    const reverse = reverses[i]
+    if (reverse.remote === remote) {
+      return toNum(reverse.local.replace('tcp:', ''))
+    }
+  }
+
+  const port = await getPort()
+  const local = `tcp:${port}`
+  await device.reverse(remote, local)
 
   return port
 }

@@ -2,12 +2,14 @@ import { makeObservable, observable, runInAction } from 'mobx'
 import extend from 'licia/extend'
 
 export class Application {
-  itemSize = 72
+  itemSize = 48
   sysPackage = true
+  listView = false
   constructor() {
     makeObservable(this, {
       itemSize: observable,
       sysPackage: observable,
+      listView: observable,
     })
 
     this.init()
@@ -25,6 +27,7 @@ export class Application {
     await main.setMainStore('application', {
       itemSize: this.itemSize,
       sysPackage: this.sysPackage,
+      listView: this.listView,
     })
   }
 }

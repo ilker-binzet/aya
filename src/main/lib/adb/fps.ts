@@ -9,9 +9,10 @@ import contain from 'licia/contain'
 import max from 'licia/max'
 import last from 'licia/last'
 import trim from 'licia/trim'
-import { handleEvent } from '../util'
+import { handleEvent } from 'share/main/lib/util'
+import { IpcGetFps } from '../../../common/types'
 
-async function getFps(deviceId: string, pkg: string) {
+const getFps: IpcGetFps = async function (deviceId, pkg) {
   let fps = 0
 
   const result: string = await shell(deviceId, 'dumpsys SurfaceFlinger')

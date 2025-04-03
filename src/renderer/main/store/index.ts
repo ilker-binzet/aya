@@ -1,17 +1,16 @@
 import { action, makeObservable, observable, runInAction } from 'mobx'
 import isStr from 'licia/isStr'
 import find from 'licia/find'
-import BaseStore from '../../store/BaseStore'
+import BaseStore from 'share/renderer/store/BaseStore'
 import { Settings } from './settings'
 import { Application } from './application'
 import { Process } from './process'
+import { File } from './file'
+import { Layout } from './layout'
 import { setMainStore } from '../../lib/util'
+import { setMemStore } from 'share/renderer/lib/util'
 import isEmpty from 'licia/isEmpty'
-
-interface IDevice {
-  id: string
-  name: string
-}
+import { IDevice } from '../../../common/types'
 
 class Store extends BaseStore {
   devices: IDevice[] = []
@@ -20,6 +19,9 @@ class Store extends BaseStore {
   settings = new Settings()
   application = new Application()
   process = new Process()
+  file = new File()
+  layout = new Layout()
+  isInit = false
   constructor() {
     super()
 
@@ -28,6 +30,7 @@ class Store extends BaseStore {
       device: observable,
       panel: observable,
       settings: observable,
+      isInit: observable,
       selectDevice: action,
       selectPanel: action,
     })
@@ -35,7 +38,7 @@ class Store extends BaseStore {
     this.bindEvent()
     this.init()
   }
-  selectDevice(device: string | IDevice | null) {
+  selectDevice = (device: string | IDevice | null) => {
     if (isStr(device)) {
       const d = find(this.devices, ({ id }) => id === device)
       if (d) {
@@ -62,10 +65,15 @@ class Store extends BaseStore {
       runInAction(() => (this.device = device))
     }
     await this.refreshDevices()
+
+    this.isInit = true
   }
   refreshDevices = async () => {
     const devices = await main.getDevices()
-    runInAction(() => (this.devices = devices))
+    runInAction(() => {
+      this.devices = devices
+      setMemStore('devices', devices)
+    })
     if (!isEmpty(devices)) {
       if (!this.device) {
         this.selectDevice(devices[0])
@@ -83,6 +91,8 @@ class Store extends BaseStore {
   }
   private bindEvent() {
     main.on('changeDevice', this.refreshDevices)
+    main.on('refreshDevices', this.refreshDevices)
+    main.on('selectDevice', this.selectDevice)
   }
 }
 

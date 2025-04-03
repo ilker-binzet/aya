@@ -4,37 +4,63 @@ import { useEffect, useState } from 'react'
 import isEmpty from 'licia/isEmpty'
 import fileSize from 'licia/fileSize'
 import types from 'licia/types'
-import { notify } from '../../../lib/util'
+import { notify } from 'share/renderer/lib/util'
 import { t } from '../../../../common/util'
 import store from '../../store'
 import copy from 'licia/copy'
-import { PannelLoading } from '../../../components/loading'
+import { PannelLoading } from '../common/loading'
 import className from 'licia/className'
 import FontAdjustModal from './FontAdjustModal'
+import LunaToolbar, { LunaToolbarSpace } from 'luna-toolbar/react'
+import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
+import PortMappingModal from './PortMappingModal'
+import RemoteControllerModal from './RemoteControllerModal'
+import toBool from 'licia/toBool'
 
 export default observer(function Overview() {
-  const [overview, setOverview] = useState<types.PlainObj<string | number>>({})
+  const [portModalVisible, setPortModalVisible] = useState(false)
+  const [remoteControllerModalVisible, setRemoteControllerModalVisible] =
+    useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [overview, setOverview] = useState<
+    types.PlainObj<string | number | boolean>
+  >({})
   const [fontAdjustModalVisible, setFontAdjustModalVisible] = useState(false)
 
-  useEffect(() => refresh(), [])
+  const { device } = store
 
-  function refresh() {
-    if (store.device) {
-      main.getOverview(store.device.id).then(setOverview)
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  async function refresh() {
+    if (!device || isLoading) {
+      return
     }
+
+    try {
+      setIsLoading(true)
+      const overview = await main.getOverview(device.id)
+      setOverview(overview)
+      // eslint-disable-next-line
+    } catch (e) {
+      notify(t('commonErr'), { icon: 'error' })
+    }
+
+    setIsLoading(false)
   }
 
   let content: JSX.Element | null = null
 
-  if (!store.device) {
+  if (!device) {
     content = (
-      <div className={className('panel', Style.container)}>
+      <div className={className('panel-body', Style.container)}>
         {t('deviceNotConnected')}
       </div>
     )
-  } else if (isEmpty(overview)) {
+  } else if (isLoading) {
     content = <PannelLoading />
-  } else {
+  } else if (!isEmpty(overview)) {
     content = (
       <div className={Style.info}>
         <div className={Style.row}>
@@ -46,7 +72,7 @@ export default observer(function Overview() {
           {item(t('serialNum'), overview.serialNum, 'serial-number')}
           {item(
             t('androidVersion'),
-            `Android ${overview.androidVersion} (API ${overview.sdkVersion})`,
+            `Android ${device.androidVersion} (API ${device.sdkVersion})`,
             'android'
           )}
           {item(t('kernelVersion'), overview.kernelVersion, 'android')}
@@ -105,7 +131,65 @@ export default observer(function Overview() {
     )
   }
 
-  return <div className={className('panel', Style.container)}>{content}</div>
+  async function root() {
+    if (!device || overview.root) {
+      return
+    }
+    try {
+      await main.root(device.id)
+      setTimeout(() => refresh(), 2000)
+      // eslint-disable-next-line
+    } catch (e) {
+      notify(t('rootModeErr'), { icon: 'error' })
+    }
+  }
+
+  return (
+    <div className={className('panel-with-toolbar', Style.container)}>
+      <LunaToolbar className="panel-toolbar">
+        <ToolbarIcon
+          icon="terminal"
+          title={t('adbCli')}
+          onClick={() => main.openAdbCli()}
+        />
+        <ToolbarIcon
+          icon="unlock"
+          disabled={!device || toBool(overview.root)}
+          state={toBool(overview.root) ? 'active' : ''}
+          title={t('rootMode')}
+          onClick={root}
+        />
+        <ToolbarIcon
+          icon="bidirection"
+          disabled={!device}
+          title={t('portMapping')}
+          onClick={() => setPortModalVisible(true)}
+        />
+        <ToolbarIcon
+          icon="remote-controller"
+          disabled={!device}
+          title={t('remoteController')}
+          onClick={() => setRemoteControllerModalVisible(true)}
+        />
+        <LunaToolbarSpace />
+        <ToolbarIcon
+          icon="refresh"
+          title={t('refresh')}
+          disabled={isLoading || !device}
+          onClick={() => refresh()}
+        />
+      </LunaToolbar>
+      {content}
+      <PortMappingModal
+        visible={portModalVisible}
+        onClose={() => setPortModalVisible(false)}
+      />
+      <RemoteControllerModal
+        visible={remoteControllerModalVisible}
+        onClose={() => setRemoteControllerModalVisible(false)}
+      />
+    </div>
+  )
 })
 
 function item(title, value, icon = 'info', onDoubleClick?: () => void) {

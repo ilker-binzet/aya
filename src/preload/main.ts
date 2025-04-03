@@ -1,37 +1,42 @@
-import { ipcRenderer, OpenDialogOptions, SaveDialogOptions } from 'electron'
-import types from 'licia/types'
+import {
+  IpcDumpWindowHierarchy,
+  IpcForward,
+  IpcGetDevices,
+  IpcGetFps,
+  IpcGetPackageInfos,
+  IpcListForwards,
+  IpcListReverses,
+  IpcReverse,
+  IpcSetScreencastAlwaysOnTop,
+} from '../common/types'
+import { ipcRenderer } from 'electron'
+import { IpcGetStore, IpcSetStore } from 'share/common/types'
+import mainObj from 'share/preload/main'
+import { invoke } from 'share/preload/util'
 
-export default {
-  getLanguage: () => ipcRenderer.invoke('getLanguage'),
-  getTheme: () => ipcRenderer.invoke('getTheme'),
-  getDevices: () => ipcRenderer.invoke('getDevices'),
-  getMainStore: (name) => ipcRenderer.invoke('getMainStore', name),
-  setMainStore: (name, val) => ipcRenderer.invoke('setMainStore', name, val),
-  getSettingsStore: (name) => ipcRenderer.invoke('getSettingsStore', name),
-  setSettingsStore: (name, val) => {
-    return ipcRenderer.invoke('setSettingsStore', name, val)
-  },
-  getOverview: (deviceId: string) => {
-    return ipcRenderer.invoke('getOverview', deviceId)
-  },
-  setFontScale: (deviceId: string, scale: number) => {
-    return ipcRenderer.invoke('setFontScale', deviceId, scale)
-  },
-  getPerformance: (deviceId: string) => {
-    return ipcRenderer.invoke('getPerformance', deviceId)
-  },
-  getUptime: (deviceId: string) => ipcRenderer.invoke('getUptime', deviceId),
-  getFps: (deviceId: string, pkg: string) =>
-    ipcRenderer.invoke('getFps', deviceId, pkg),
-  createShell: (deviceId: string) => {
-    return ipcRenderer.invoke('createShell', deviceId)
-  },
-  writeShell: (sessionId: string, data: string) => {
-    return ipcRenderer.invoke('writeShell', sessionId, data)
-  },
-  resizeShell: (sessionId: string, cols: number, rows: number) => {
-    return ipcRenderer.invoke('resizeShell', sessionId, cols, rows)
-  },
+export default Object.assign(mainObj, {
+  getDevices: invoke<IpcGetDevices>('getDevices'),
+  getMainStore: invoke<IpcGetStore>('getMainStore'),
+  setMainStore: invoke<IpcSetStore>('setMainStore'),
+  getScreencastStore: invoke<IpcGetStore>('getScreencastStore'),
+  setScreencastStore: invoke<IpcSetStore>('setScreencastStore'),
+  setScreencastAlwaysOnTop: invoke<IpcSetScreencastAlwaysOnTop>(
+    'setScreencastAlwaysOnTop'
+  ),
+  getSettingsStore: invoke<IpcGetStore>('getSettingsStore'),
+  setSettingsStore: invoke<IpcSetStore>('setSettingsStore'),
+  showScreencast: invoke('showScreencast'),
+  closeScreencast: invoke('closeScreencast'),
+  restartScreencast: invoke('restartScreencast'),
+  showDevices: invoke('showDevices'),
+  getOverview: invoke('getOverview'),
+  setFontScale: invoke('setFontScale'),
+  getPerformance: invoke('getPerformance'),
+  getUptime: invoke('getUptime'),
+  getFps: invoke<IpcGetFps>('getFps'),
+  createShell: invoke('createShell'),
+  writeShell: invoke('writeShell'),
+  resizeShell: invoke('resizeShell'),
   killShell: (sessionId: string) => ipcRenderer.invoke('killShell', sessionId),
   screencap: (deviceId: string) => ipcRenderer.invoke('screencap', deviceId),
   openLogcat: (deviceId: string) => ipcRenderer.invoke('openLogcat', deviceId),
@@ -71,9 +76,7 @@ export default {
   getPackages: (deviceId: string, system?: boolean) => {
     return ipcRenderer.invoke('getPackages', deviceId, system)
   },
-  getPackageInfos: (deviceId: string, packageNames: string[]) => {
-    return ipcRenderer.invoke('getPackageInfos', deviceId, packageNames)
-  },
+  getPackageInfos: invoke<IpcGetPackageInfos>('getPackageInfos'),
   disablePackage: (deviceId: string, pkg: string) => {
     return ipcRenderer.invoke('disablePackage', deviceId, pkg)
   },
@@ -83,27 +86,50 @@ export default {
   pullFile: (deviceId: string, path: string, dest: string) => {
     return ipcRenderer.invoke('pullFile', deviceId, path, dest)
   },
-  openExternal: (url: string) => ipcRenderer.invoke('openExternal', url),
-  showContextMenu: (x: number, y: number, template: any) => {
-    ipcRenderer.invoke(
-      'showContextMenu',
-      Math.round(x),
-      Math.round(y),
-      template
-    )
+  pushFile: (deviceId: string, src: string, dest: string) => {
+    return ipcRenderer.invoke('pushFile', deviceId, src, dest)
   },
-  showOpenDialog: (options: OpenDialogOptions = {}) => {
-    return ipcRenderer.invoke('showOpenDialog', options)
+  openFile: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('openFile', deviceId, path)
   },
-  showSaveDialog: (options: SaveDialogOptions = {}) => {
-    return ipcRenderer.invoke('showSaveDialog', options)
+  deleteFile: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('deleteFile', deviceId, path)
   },
-  getLogs: () => ipcRenderer.invoke('getLogs'),
-  clearLogs: () => ipcRenderer.invoke('clearLogs'),
-  relaunch: () => ipcRenderer.invoke('relaunch'),
-  on: (event: string, cb: types.AnyFn) => {
-    const listener = (e, ...args) => cb(...args)
-    ipcRenderer.on(event, listener)
-    return () => ipcRenderer.off(event, listener)
+  deleteDir: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('deleteDir', deviceId, path)
   },
-}
+  createDir: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('createDir', deviceId, path)
+  },
+  readDir: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('readDir', deviceId, path)
+  },
+  statFile: (deviceId: string, path: string) => {
+    return ipcRenderer.invoke('statFile', deviceId, path)
+  },
+  moveFile: (deviceId: string, src: string, dest: string) => {
+    return ipcRenderer.invoke('moveFile', deviceId, src, dest)
+  },
+  connectDevice: (host: string, port?: number) => {
+    return ipcRenderer.invoke('connectDevice', host, port)
+  },
+  disconnectDevice: (host: string, port?: number) => {
+    return ipcRenderer.invoke('disconnectDevice', host, port)
+  },
+  startScrcpy: (deviceId: string, args: string[]) => {
+    return ipcRenderer.invoke('startScrcpy', deviceId, args)
+  },
+  reverseTcp: (deviceId: string, remote: string) => {
+    return ipcRenderer.invoke('reverseTcp', deviceId, remote)
+  },
+  inputKey: (deviceId: string, keyCode: number) => {
+    return ipcRenderer.invoke('inputKey', deviceId, keyCode)
+  },
+  listForwards: invoke<IpcListForwards>('listForwards'),
+  listReverses: invoke<IpcListReverses>('listReverses'),
+  forward: invoke<IpcForward>('forward'),
+  reverse: invoke<IpcReverse>('reverse'),
+  openAdbCli: invoke('openAdbCli'),
+  dumpWindowHierarchy: invoke<IpcDumpWindowHierarchy>('dumpWindowHierarchy'),
+  root: invoke('root'),
+})

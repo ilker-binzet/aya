@@ -16,12 +16,12 @@ import loadImg from 'licia/loadImg'
 import className from 'licia/className'
 import LunaImageViewer from 'luna-image-viewer/react'
 import ImageViewer from 'luna-image-viewer'
-import ToolbarIcon from '../../../components/ToolbarIcon'
+import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
 import { useEffect, useRef, useState } from 'react'
 import store from '../../store'
 import { t } from '../../../../common/util'
-import CopyButton from '../../../components/CopyButton'
-import { copyData } from '../../lib/util'
+import CopyButton from 'share/renderer/components/CopyButton'
+import { copyData } from 'share/renderer/lib/util'
 
 export default observer(function Screenshot() {
   const [image, setImage] = useState<{
@@ -128,12 +128,14 @@ export default observer(function Screenshot() {
           }
         />
       </LunaToolbar>
-      {image && (
+      {image ? (
         <LunaImageViewer
           className="panel-body"
           image={image.url}
           onCreate={(imageViewer) => (imageViewerRef.current = imageViewer)}
-        ></LunaImageViewer>
+        />
+      ) : (
+        <div className="panel-body" />
       )}
     </div>
   )
