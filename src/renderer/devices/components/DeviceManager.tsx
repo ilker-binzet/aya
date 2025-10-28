@@ -3,49 +3,51 @@ import { observer } from 'mobx-react-lite'
 import Style from './DeviceManager.module.scss'
 import { t } from '../../../common/util'
 import map from 'licia/map'
+import concat from 'licia/concat'
 import store from '../store'
-import { useEffect, useState } from 'react'
+import { useRef } from 'react'
+import DataGrid from 'luna-data-grid'
+import { useResizeSensor } from 'share/renderer/lib/hooks'
 
 export default observer(function DeviceManager() {
-  const [height, setHeight] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dataGridRef = useRef<DataGrid>(null)
 
-  useEffect(() => {
-    function resize() {
-      const height = window.innerHeight - 58
-      setHeight(height)
-    }
-    resize()
-    window.addEventListener('resize', resize)
+  useResizeSensor(containerRef, () => {
+    dataGridRef.current?.fit()
+  })
 
-    return () => {
-      window.removeEventListener('resize', resize)
-    }
-  }, [])
-
-  const devices = map(store.devices, (device) => {
+  const devices = map(concat(store.devices, store.remoteDevices), (device) => {
     return {
       id: device.id,
       name: device.name,
+      serialno: device.serialno,
       androidVersion: `Android ${device.androidVersion} (API ${device.sdkVersion})`,
+      status: device.type === 'offline' ? t('offline') : t('online'),
+      type: device.type,
     }
   })
 
   return (
-    <div className={Style.devices}>
+    <div ref={containerRef} className={Style.container}>
       <LunaDataGrid
-        className={Style.grid}
-        onSelect={(node) => store.selectDevice(node.data as any)}
+        className={Style.devices}
+        onSelect={(node) => store.selectDevice(node.data.id as string)}
         onDeselect={() => store.selectDevice(null)}
         columns={columns}
         data={devices}
         selectable={true}
         filter={store.filter}
-        minHeight={height}
-        maxHeight={height}
         onDoubleClick={(e, node) => {
-          main.sendToWindow('main', 'selectDevice', node.data.id)
+          if (node.data.type !== 'offline') {
+            main.sendToWindow('main', 'selectDevice', node.data.id)
+          }
         }}
         uniqueId="id"
+        onCreate={(dataGrid) => {
+          dataGridRef.current = dataGrid
+          dataGrid.fit()
+        }}
       />
     </div>
   )
@@ -56,18 +58,30 @@ const columns = [
     id: 'id',
     title: 'ID',
     sortable: true,
-    weight: 20,
+    weight: 15,
+  },
+  {
+    id: 'serialno',
+    title: t('serialno'),
+    sortable: true,
+    weight: 15,
   },
   {
     id: 'name',
     title: t('name'),
     sortable: true,
-    weight: 40,
+    weight: 30,
   },
   {
     id: 'androidVersion',
     title: t('androidVersion'),
     sortable: true,
-    weight: 40,
+    weight: 30,
+  },
+  {
+    id: 'status',
+    title: t('status'),
+    sortable: true,
+    weight: 10,
   },
 ]

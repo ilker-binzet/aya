@@ -1,12 +1,17 @@
 import { Menu, MenuItemConstructorOptions, app, shell } from 'electron'
 import * as window from 'share/main/lib/window'
 import * as terminal from 'share/main/window/terminal'
+import * as process from 'share/main/window/process'
+import * as about from 'share/main/window/about'
+import * as avd from '../window/avd'
+import * as devices from '../window/devices'
 import isMac from 'licia/isMac'
 import { t } from '../../common/util'
 import upperCase from 'licia/upperCase'
 import isWindows from 'licia/isWindows'
 import * as updater from 'share/main/lib/updater'
-import { handleEvent } from 'share/main/lib/util'
+import { getUserDataPath, handleEvent } from 'share/main/lib/util'
+import { isDev } from 'share/common/util'
 import * as language from 'share/main/lib/language'
 
 function getTemplate(): MenuItemConstructorOptions[] {
@@ -36,7 +41,7 @@ function getTemplate(): MenuItemConstructorOptions[] {
       {
         label: t('aboutAya'),
         click() {
-          window.sendTo('main', 'showAbout')
+          about.showWin()
         },
       },
       {
@@ -51,8 +56,9 @@ function getTemplate(): MenuItemConstructorOptions[] {
       },
       {
         label: t('quitAya'),
+        accelerator: isMac ? 'Command+Q' : 'Ctrl+Q',
         click() {
-          window.getWin('main')?.close()
+          app.quit()
         },
       },
     ],
@@ -88,9 +94,30 @@ function getTemplate(): MenuItemConstructorOptions[] {
     label: t('tools'),
     submenu: [
       {
+        label: t('deviceManager'),
+        click() {
+          devices.showWin()
+        },
+      },
+      {
+        label: t('avdManager'),
+        click() {
+          avd.showWin()
+        },
+      },
+      {
+        type: 'separator',
+      },
+      {
         label: t('terminal'),
         click() {
           terminal.showWin()
+        },
+      },
+      {
+        label: t('processManager'),
+        click() {
+          process.showWin()
         },
       },
     ],
@@ -129,6 +156,22 @@ function getTemplate(): MenuItemConstructorOptions[] {
       {
         type: 'separator',
       },
+      ...(isDev()
+        ? [
+            {
+              label: t('openUserDataDir'),
+              click() {
+                shell.openPath(getUserDataPath(''))
+              },
+            },
+            {
+              label: t('debugMainProcess'),
+              click() {
+                process.debugMainProcess()
+              },
+            },
+          ]
+        : []),
       {
         role: 'toggledevtools',
         label: t('toggleDevtools'),

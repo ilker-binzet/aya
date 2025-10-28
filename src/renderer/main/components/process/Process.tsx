@@ -21,12 +21,16 @@ import singleton from 'licia/singleton'
 import map from 'licia/map'
 import defaultIcon from '../../../assets/default-icon.png'
 import toEl from 'licia/toEl'
+import contain from 'licia/contain'
 import find from 'licia/find'
+import DataGrid from 'luna-data-grid'
+import { useWindowResize } from 'share/renderer/lib/hooks'
 
 export default observer(function Process() {
   const [processes, setProcesses] = useState<any[]>([])
+  const packagesRef = useRef<string[]>([])
   const packageInfosRef = useRef<any[]>([])
-  const [listHeight, setListHeight] = useState(0)
+  const dataGridRef = useRef<DataGrid>(null)
   const [selected, setSelected] = useState<any>(null)
   const [filter, setFilter] = useState('')
 
@@ -37,8 +41,11 @@ export default observer(function Process() {
       if (!device) {
         return
       }
-      const packages = await main.getPackages(device.id)
-      packageInfosRef.current = await main.getPackageInfos(device.id, packages)
+      packagesRef.current = await main.getPackages(device.id)
+      packageInfosRef.current = await main.getPackageInfos(
+        device.id,
+        packagesRef.current
+      )
     }),
     []
   )
@@ -78,9 +85,18 @@ export default observer(function Process() {
             return process
           }
         })
-        if (!isEmpty(packageInfosRef.current) && store.process.onlyPackage) {
+        if (!isEmpty(packagesRef.current) && store.process.onlyPackage) {
           processes = processes.filter((process) => {
-            return process.packageName
+            if (process.packageName) {
+              return true
+            }
+
+            const match = process.name.match(/^[\w.]+/)
+            if (match) {
+              return contain(packagesRef.current, match[0])
+            }
+
+            return false
           })
         }
         setProcesses(processes)
@@ -102,20 +118,12 @@ export default observer(function Process() {
     }
     refresh()
 
-    function resize() {
-      const height = window.innerHeight - 89
-      setListHeight(height)
-    }
-    resize()
-
-    window.addEventListener('resize', resize)
-
     return () => {
       destroyed = true
-
-      window.removeEventListener('resize', resize)
     }
   }, [])
+
+  useWindowResize(() => dataGridRef.current?.fit())
 
   async function stop() {
     if (!selected || !has(selected, 'packageName')) {
@@ -144,8 +152,8 @@ export default observer(function Process() {
           value={store.process.onlyPackage}
           label={t('onlyPackage')}
           onChange={(val) => {
-            getProcesses()
             store.process.set('onlyPackage', val)
+            getProcesses()
           }}
         />
         <LunaToolbarSeparator />
@@ -161,16 +169,18 @@ export default observer(function Process() {
         />
       </LunaToolbar>
       <LunaDataGrid
-        onSelect={async (node) => setSelected(node.data)}
+        onSelect={(node) => setSelected(node.data)}
         onDeselect={() => setSelected(null)}
         filter={filter}
         className={Style.processes}
         data={processes}
         columns={columns}
         selectable={true}
-        minHeight={listHeight}
-        maxHeight={listHeight}
         uniqueId="pid"
+        onCreate={(dataGrid) => {
+          dataGridRef.current = dataGrid
+          dataGrid.fit()
+        }}
       />
     </div>
   )
@@ -187,26 +197,31 @@ const columns = [
     id: '%cpu',
     title: '% CPU',
     sortable: true,
+    weight: 10,
   },
   {
     id: 'time+',
     title: t('cpuTime'),
     sortable: true,
+    weight: 10,
   },
   {
     id: 'res',
     title: t('memory'),
     sortable: true,
     comparator: (a: string, b: string) => fileSize(a) - fileSize(b),
+    weight: 10,
   },
   {
     id: 'pid',
     title: 'PID',
     sortable: true,
+    weight: 10,
   },
   {
     id: 'user',
     title: t('user'),
     sortable: true,
+    weight: 10,
   },
 ]

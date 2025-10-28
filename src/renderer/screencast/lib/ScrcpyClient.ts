@@ -11,9 +11,10 @@ import {
   ScrcpyControlMessageWriter,
   AndroidMotionEventAction,
   AndroidMotionEventButton,
+  AndroidScreenPowerMode,
   AndroidKeyEventAction,
   AndroidKeyCode,
-  AndroidScreenPowerMode,
+  ScrcpyMediaStreamDataPacket,
 } from '@yume-chan/scrcpy'
 import {
   InspectStream,
@@ -22,6 +23,7 @@ import {
   BufferedReadableStream,
   PushReadableStream,
   Consumable,
+  ReadableWritablePair,
 } from '@yume-chan/stream-extra'
 import {
   WebCodecsVideoDecoder,
@@ -32,8 +34,14 @@ import { getUint32BigEndian } from '@yume-chan/no-data-view'
 import Readiness from 'licia/Readiness'
 import { OpusStream } from './AudioStream'
 import sleep from 'licia/sleep'
-import { socketToReadableStream, socketToWritableStream } from './util'
+import { socketToReadableStream, socketToReadableWritablePair } from './util'
 import clamp from 'licia/clamp'
+import Recorder from './Recorder'
+import convertBin from 'licia/convertBin'
+import dateFormat from 'licia/dateFormat'
+import noop from 'licia/noop'
+import Keyboard from './Keyboard'
+import isUndef from 'licia/isUndef'
 
 const logger = log('ScrcpyClient')
 
@@ -45,6 +53,8 @@ export default class ScrcpyClient extends Emitter {
   private control: any
   private options: ScrcpyOptions3_1
   private readiness = new Readiness()
+  private recorder = new Recorder()
+  private keyboard = new Keyboard(this)
   constructor(deviceId: string, options: ScrcpyOptions3_1) {
     super()
 
@@ -58,11 +68,34 @@ export default class ScrcpyClient extends Emitter {
     await this.readiness.ready('video')
     return this.video
   }
+  async getControl() {
+    await this.readiness.ready('control')
+    return this.control
+  }
   destroy() {
     logger.info('destroy')
 
     if (this.server) {
       this.server.close()
+    }
+  }
+  startRecording() {
+    if (this.control) {
+      const controller: ScrcpyControlMessageWriter = this.control.controller
+      controller.resetVideo()
+    }
+    this.recorder.start()
+  }
+  async stopRecording() {
+    const buf = this.recorder.stop()
+    if (buf) {
+      const { canceled, filePath } = await main.showSaveDialog({
+        defaultPath: `recording-${dateFormat('yyyymmddHHMM')}.mkv`,
+      })
+      if (canceled) {
+        return
+      }
+      await node.writeFile(filePath, convertBin(buf, 'Uint8Array'))
     }
   }
   async turnOffScreen() {
@@ -77,6 +110,17 @@ export default class ScrcpyClient extends Emitter {
     if (this.control) {
       const controller: ScrcpyControlMessageWriter = this.control.controller
       controller.setScreenPowerMode(AndroidScreenPowerMode.Normal)
+    }
+  }
+  async setClipboard(text: string, paste = false) {
+    await this.readiness.ready('control')
+    if (this.control) {
+      const controller: ScrcpyControlMessageWriter = this.control.controller
+      controller.setClipboard({
+        sequence: 0n,
+        content: text,
+        paste,
+      })
     }
   }
   private start = async () => {
@@ -107,7 +151,7 @@ export default class ScrcpyClient extends Emitter {
       })
       sleep(1000).then(() => {
         if (!isAudio) {
-          this.createControl(socketToWritableStream(socket))
+          this.createControl(socketToReadableWritablePair(socket))
         }
       })
     })
@@ -167,6 +211,7 @@ export default class ScrcpyClient extends Emitter {
     )
 
     logger.info('video metadata', metadata)
+    this.recorder.videoMetadata = metadata
 
     let codec: any = 0
     switch (metadata.codec) {
@@ -185,6 +230,7 @@ export default class ScrcpyClient extends Emitter {
         .pipeThrough(options.createMediaStreamTransformer())
         .pipeThrough(
           new InspectStream((packet) => {
+            this.recorder.addVideoPacket(packet)
             if (packet.type === 'configuration') {
               logger.info('video configuration', packet.data)
             }
@@ -204,42 +250,45 @@ export default class ScrcpyClient extends Emitter {
 
     el.addEventListener('pointerdown', (e) => {
       el.focus()
-      this.injectTouch(el, e)
+      if (e.button === 0) {
+        this.injectTouch(el, e)
+      } else {
+        this.injectKeyCode(e)
+      }
     })
     el.addEventListener('pointermove', (e) => this.injectTouch(el, e))
-    el.addEventListener('pointerup', (e) => this.injectTouch(el, e))
+    el.addEventListener('pointerup', (e) => {
+      if (e.button === 0) {
+        this.injectTouch(el, e)
+      } else {
+        this.injectKeyCode(e)
+      }
+    })
 
     el.addEventListener('wheel', (e) => this.injectScroll(el, e))
 
     el.setAttribute('tabindex', '0')
-    el.addEventListener('keydown', (e) => this.injectKeyCode(e))
-    el.addEventListener('keyup', (e) => this.injectKeyCode(e))
+    el.addEventListener('keydown', this.keyboard.down)
+    el.addEventListener('keyup', this.keyboard.up)
   }
-  private injectKeyCode(e: KeyboardEvent) {
+  private injectKeyCode(e: PointerEvent) {
     e.preventDefault()
     e.stopPropagation()
 
-    const { type, code } = e
-
-    let action: AndroidKeyEventAction
-    switch (type) {
-      case 'keydown':
-        action = AndroidKeyEventAction.Down
-        break
-      case 'keyup':
-        action = AndroidKeyEventAction.Up
-        break
-      default:
-        throw new Error(`Unsupported event type: ${type}`)
+    const actionMap = {
+      pointerdown: AndroidKeyEventAction.Down,
+      pointerup: AndroidKeyEventAction.Up,
     }
-
-    const keyCode = AndroidKeyCode[code as keyof typeof AndroidKeyCode]
+    const action = actionMap[e.type]
+    if (isUndef(action)) {
+      return
+    }
 
     if (this.control) {
       const controller: ScrcpyControlMessageWriter = this.control.controller
       controller.injectKeyCode({
         action,
-        keyCode,
+        keyCode: MouseEventButtonToAndroidButton[e.button - 1],
         repeat: 0,
         metaState: 0,
       })
@@ -355,7 +404,6 @@ export default class ScrcpyClient extends Emitter {
         ),
       }
 
-      // eslint-disable-next-line
       const [recordStream, playbackStream] = this.audio.stream.tee()
 
       let player: any
@@ -382,22 +430,43 @@ export default class ScrcpyClient extends Emitter {
 
         player.start()
       }
+
+      this.recorder.audioCodec = metadata.codec
+
+      recordStream.pipeTo(
+        new WritableStream({
+          write: (packet: ScrcpyMediaStreamDataPacket) => {
+            if (packet.type === 'data') {
+              this.recorder.addAudioPacket(packet)
+            }
+          },
+        })
+      )
     }
 
     logger.info('audio ready')
     this.readiness.signal('audio')
   }
   private async createControl(
-    controlStream: WritableStream<Consumable<Uint8Array>>
+    controlStream: ReadableWritablePair<Uint8Array, Consumable<Uint8Array>>
   ) {
     logger.info('control stream connected')
 
     const { options } = this
 
     const controller = new ScrcpyControlMessageWriter(
-      controlStream.getWriter(),
+      controlStream.writable.getWriter(),
       options
     )
+
+    options.clipboard!.pipeTo(
+      new WritableStream({
+        write: (content) => {
+          navigator.clipboard.writeText(content)
+        },
+      })
+    )
+    this.parseDeviceMessages(controlStream.readable).catch(noop)
 
     this.control = {
       controller,
@@ -405,6 +474,25 @@ export default class ScrcpyClient extends Emitter {
 
     logger.info('control ready')
     this.readiness.signal('control')
+  }
+  private async parseDeviceMessages(controlStream: ReadableStream<Uint8Array>) {
+    const buffered = new BufferedReadableStream(controlStream)
+    try {
+      while (true) {
+        let type: number
+        try {
+          const result = await buffered.readExactly(1)
+          type = result[0]!
+        } catch {
+          this.options.endDeviceMessageStream()
+          break
+        }
+        await this.options.parseDeviceMessage(type, buffered)
+      }
+    } catch (e) {
+      this.options.endDeviceMessageStream(e)
+      buffered.cancel(e).catch(() => {})
+    }
   }
 }
 
@@ -414,4 +502,9 @@ const PointerEventButtonToAndroidButton = [
   AndroidMotionEventButton.Secondary,
   AndroidMotionEventButton.Back,
   AndroidMotionEventButton.Forward,
+]
+
+const MouseEventButtonToAndroidButton = [
+  AndroidKeyCode.AndroidHome,
+  AndroidKeyCode.AndroidBack,
 ]

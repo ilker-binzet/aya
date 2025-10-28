@@ -33,6 +33,10 @@ import defaultIcon from '../../../assets/default-icon.png'
 import contextMenu from 'share/renderer/lib/contextMenu'
 import dateFormat from 'licia/dateFormat'
 import toEl from 'licia/toEl'
+import DataGrid from 'luna-data-grid'
+import { useWindowResize } from 'share/renderer/lib/hooks'
+import fileSize from 'licia/fileSize'
+import jsonClone from 'licia/jsonClone'
 
 export default observer(function Application() {
   const [isLoading, setIsLoading] = useState(false)
@@ -40,7 +44,7 @@ export default observer(function Application() {
   const [packageInfos, setPackageInfos] = useState<IPackageInfo[]>([])
   const [filter, setFilter] = useState('')
   const [dropHighlight, setDropHighlight] = useState(false)
-  const [listHeight, setListHeight] = useState(0)
+  const dataGridRef = useRef<DataGrid>(null)
   const [packageInfoModalVisible, setPackageInfoModalVisible] = useState(false)
   const [isOpenEffectAnimating, setIsOpenEffectAnimating] = useState(false)
   const [openEffectStyle, setOpenEffectStyle] = useState({
@@ -56,19 +60,8 @@ export default observer(function Application() {
 
   useEffect(() => {
     refresh()
-
-    function resize() {
-      const height = window.innerHeight - 89
-      setListHeight(height)
-    }
-    resize()
-
-    window.addEventListener('resize', resize)
-
-    return () => {
-      window.removeEventListener('resize', resize)
-    }
   }, [])
+  useWindowResize(() => dataGridRef.current?.fit())
 
   async function refresh(packageName?: string) {
     if (!device || isLoading) {
@@ -180,8 +173,7 @@ export default observer(function Application() {
   async function open(packageName: string) {
     try {
       await main.startPackage(store.device!.id, packageName)
-      // eslint-disable-next-line
-    } catch (e) {
+    } catch {
       notify(t('startPackageErr'), { icon: 'error' })
     }
   }
@@ -311,6 +303,10 @@ export default observer(function Application() {
     >
       {store.application.listView ? (
         <LunaDataGrid
+          onColumnChange={async () => {
+            const columns = dataGridRef.current!.getOption('columns')
+            store.application.set('dataGridColumns', jsonClone(columns))
+          }}
           onClick={(e: any, node) => {
             showInfo((node.data as any).packageName)
           }}
@@ -320,6 +316,7 @@ export default observer(function Application() {
           onContextMenu={(e: any, node) => {
             onContextMenu(e, (node.data as any).info)
           }}
+          headerContextMenu={true}
           filter={filter}
           columns={columns}
           data={map(packageInfos, (info: IPackageInfo) => {
@@ -334,6 +331,13 @@ export default observer(function Application() {
               versionName: info.versionName,
               minSdkVersion: info.minSdkVersion,
               targetSdkVersion: info.targetSdkVersion,
+              storageUsage: fileSize(
+                info.appSize + info.dataSize + info.cacheSize
+              ),
+              appSize: fileSize(info.appSize),
+              dataSize: fileSize(info.dataSize),
+              cacheSize: fileSize(info.cacheSize),
+              enabled: info.enabled ? t('enabled') : t('disabled'),
               firstInstallTime: dateFormat(
                 new Date(info.firstInstallTime),
                 'yyyy-mm-dd HH:MM:ss'
@@ -344,10 +348,13 @@ export default observer(function Application() {
               ),
             }
           })}
-          minHeight={listHeight}
-          maxHeight={listHeight}
           selectable={true}
           uniqueId="packageName"
+          onCreate={(dataGrid) => {
+            dataGridRef.current = dataGrid
+            dataGrid.fit()
+            dataGrid.setOption('columns', store.application.dataGridColumns)
+          }}
         />
       ) : (
         <LunaIconList
@@ -491,6 +498,10 @@ export default observer(function Application() {
   )
 })
 
+function sizeCmp(a: string, b: string) {
+  return fileSize(a) - fileSize(b)
+}
+
 const columns = [
   {
     id: 'label',
@@ -502,7 +513,7 @@ const columns = [
     id: 'packageName',
     title: t('package'),
     sortable: true,
-    weight: 20,
+    weight: 25,
   },
   {
     id: 'versionName',
@@ -520,18 +531,58 @@ const columns = [
     id: 'targetSdkVersion',
     title: t('targetSdkVersion'),
     sortable: true,
+    visible: false,
+    weight: 10,
+  },
+  {
+    id: 'storageUsage',
+    title: t('storageUsage'),
+    sortable: true,
+    comparator: sizeCmp,
+    weight: 10,
+  },
+  {
+    id: 'appSize',
+    title: t('appSize'),
+    sortable: true,
+    comparator: sizeCmp,
+    visible: false,
+    weight: 10,
+  },
+  {
+    id: 'dataSize',
+    title: t('dataSize'),
+    sortable: true,
+    comparator: sizeCmp,
+    visible: false,
+    weight: 10,
+  },
+  {
+    id: 'cacheSize',
+    title: t('cacheSize'),
+    sortable: true,
+    comparator: sizeCmp,
+    visible: false,
+    weight: 10,
+  },
+  {
+    id: 'enabled',
+    title: t('status'),
+    sortable: true,
     weight: 10,
   },
   {
     id: 'firstInstallTime',
     title: t('firstInstallTime'),
     sortable: true,
+    visible: false,
     weight: 15,
   },
   {
     id: 'lastUpdateTime',
     title: t('lastUpdateTime'),
     sortable: true,
+    visible: false,
     weight: 15,
   },
 ]

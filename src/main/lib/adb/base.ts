@@ -10,9 +10,17 @@ import toNum from 'licia/toNum'
 import types from 'licia/types'
 import isStr from 'licia/isStr'
 import log from 'share/common/log'
-import { handleEvent } from 'share/main/lib/util'
+import { handleEvent, resolveResources } from 'share/main/lib/util'
+import isWindows from 'licia/isWindows'
+import isStrBlank from 'licia/isStrBlank'
+import fs from 'fs-extra'
+import { getSettingsStore } from '../store'
+import childProcess from 'node:child_process'
+import contain from 'licia/contain'
 
 const logger = log('adbBase')
+
+const settingsStore = getSettingsStore()
 
 let client: Client
 
@@ -113,7 +121,7 @@ export async function shell(
   const socket = await device.shell(cmds.join('\necho "aya_separator"\n'))
   const output: string = (await Adb.util.readAll(socket)).toString()
 
-  if (cmds.length === 1) {
+  if (isStr(cmd)) {
     return trim(output)
   }
 
@@ -167,4 +175,54 @@ export function setDeviceStore(deviceId: string, key: string, value: any) {
     deviceStore[deviceId] = {}
   }
   deviceStore[deviceId][key] = value
+}
+
+export function getAdbPath() {
+  let bin = isWindows
+    ? resolveResources('adb/adb.exe')
+    : resolveResources('adb/adb')
+  const adbPath = settingsStore.get('adbPath')
+  if (adbPath === 'adb' || (!isStrBlank(adbPath) && fs.existsSync(adbPath))) {
+    bin = adbPath
+  }
+  return bin
+}
+
+export function spawnAdb(args: string[]): Promise<{
+  stdout: string
+  stderr: string
+  code: number | null
+}> {
+  const bin = getAdbPath()
+
+  return new Promise((resolve, reject) => {
+    const cp = childProcess.spawn(bin, args, {
+      env: { ...process.env },
+      shell: true,
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    cp.stdout?.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    cp.stderr?.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    cp.on('error', (err) => {
+      reject(err)
+    })
+
+    cp.on('close', (code) => {
+      resolve({ stdout, stderr, code })
+    })
+  })
+}
+
+export async function isRooted(deviceId: string): Promise<boolean> {
+  const id = await shell(deviceId, 'id')
+  return contain(id, 'uid=0')
 }

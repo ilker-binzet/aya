@@ -8,7 +8,7 @@ import LunaSetting, {
 } from 'luna-setting/react'
 import { notify } from 'share/renderer/lib/util'
 import { t } from '../../../../common/util'
-import Style from './Settings.module.scss'
+import Style from './SettingsModal.module.scss'
 import { createPortal } from 'react-dom'
 import { observer } from 'mobx-react-lite'
 import contain from 'licia/contain'
@@ -23,7 +23,7 @@ const notifyRequireReload = debounce(() => {
 
 export default observer(function SettingsModal(props: IModalProps) {
   function onChange(key, val) {
-    if (contain(['language'], key)) {
+    if (contain(['language', 'useNativeTitlebar'], key)) {
       notifyRequireReload()
     }
     store.settings.set(key, val)
@@ -54,14 +54,21 @@ export default observer(function SettingsModal(props: IModalProps) {
           title={t('language')}
           options={{
             [t('sysPreference')]: 'system',
-            ['العربية']: 'ar-IQ',
+            ['العربية']: 'ar',
             English: 'en-US',
-            ['Français']: 'fr-FR',
-            ['Русский']: 'ru-RU',
-            ['Türkçe']: 'tr-TR',
+            ['Français']: 'fr',
+            ['Português']: 'pt',
+            ['Español']: 'es',
+            ['Русский']: 'ru',
+            ['Türkçe']: 'tr',
             ['中文']: 'zh-CN',
             ['繁體中文']: 'zh-TW',
           }}
+        />
+        <LunaSettingCheckbox
+          keyName="useNativeTitlebar"
+          value={store.settings.useNativeTitlebar}
+          description={t('useNativeTitlebar')}
         />
         <LunaSettingSeparator />
         <LunaSettingTitle title="ADB" />

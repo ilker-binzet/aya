@@ -19,6 +19,7 @@ import contextMenu from 'share/renderer/lib/contextMenu'
 import LunaModal from 'luna-modal'
 import endWith from 'licia/endWith'
 import normalizePath from 'licia/normalizePath'
+import LunaPathBar from 'luna-path-bar/react'
 
 export default observer(function File() {
   const [fileList, setFileList] = useState<any[]>([])
@@ -225,8 +226,7 @@ export default observer(function File() {
       notify(t('fileUploading', { path: file }), { icon: 'info' })
       try {
         await main.pushFile(device.id, file, path + name)
-        // eslint-disable-next-line
-      } catch (e) {
+      } catch {
         notify(t('uploadFileErr'), { icon: 'error' })
       }
     }
@@ -234,20 +234,26 @@ export default observer(function File() {
     await getFiles(path)
   }
 
-  async function goCustomPath() {
-    let p = customPath
+  async function goCustomPath(p: string) {
     if (!endWith(p, '/')) {
       p = p + '/'
     }
     p = normalizePath(p)
+    if (p === customPath) {
+      return
+    }
+
+    setCustomPath(p)
 
     try {
-      const stat = await main.statFile(device!.id, customPath)
+      const stat = await main.statFile(device!.id, p)
       if (stat.directory) {
         go(p)
+      } else {
+        setCustomPath(customPath)
       }
-      // eslint-disable-next-line
-    } catch (e) {
+    } catch {
+      setCustomPath(customPath)
       notify(t('folderNotExistErr'), { icon: 'error' })
     }
   }
@@ -273,40 +279,25 @@ export default observer(function File() {
           onClick={up}
           disabled={path === '/' || !device}
         />
-        <LunaToolbarHtml
-          className={className(Style.path, 'luna-toolbar-item-input')}
-          disabled={!device}
-        >
-          <input
-            value={customPath}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              setCustomPath(e.target.value)
-            }}
-            onKeyDown={async (e: React.KeyboardEvent) => {
-              if (e.key === 'Enter') {
-                goCustomPath()
-              }
-            }}
-          />
-        </LunaToolbarHtml>
         <ToolbarIcon
           icon="refresh"
           title={t('refresh')}
           onClick={() => getFiles(path)}
           disabled={!device}
         />
+        <LunaToolbarHtml className={Style.pathContainer} disabled={!device}>
+          <LunaPathBar
+            className={Style.path}
+            rootLabel={t('storage')}
+            path={customPath}
+            onChange={(path) => goCustomPath('/' + path)}
+          />
+        </LunaToolbarHtml>
         <LunaToolbarInput
           keyName="filter"
           value={filter}
           placeholder={t('filter')}
           onChange={(val) => setFilter(val)}
-        />
-        <LunaToolbarSeparator />
-        <ToolbarIcon
-          icon="upload"
-          title={t('upload')}
-          onClick={() => uploadFiles()}
-          disabled={!device}
         />
         <LunaToolbarSeparator />
         <ToolbarIcon

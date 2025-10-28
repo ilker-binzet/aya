@@ -22,6 +22,7 @@ import store from '../../store'
 import { t } from '../../../../common/util'
 import CopyButton from 'share/renderer/components/CopyButton'
 import { copyData } from 'share/renderer/lib/util'
+import dateFormat from 'licia/dateFormat'
 
 export default observer(function Screenshot() {
   const [image, setImage] = useState<{
@@ -31,7 +32,7 @@ export default observer(function Screenshot() {
     height: number
     size: number
   } | null>(null)
-  const imageViewerRef = useRef<ImageViewer>()
+  const imageViewerRef = useRef<ImageViewer>(null)
 
   useEffect(() => {
     recapture()
@@ -39,7 +40,7 @@ export default observer(function Screenshot() {
 
   function save() {
     const blob = convertBin(image!.data, 'Blob')
-    download(blob, 'screenshot.png', 'image/png')
+    download(blob, `screenshot-${dateFormat('yyyymmddHHMM')}.png`, 'image/png')
   }
 
   function copy() {

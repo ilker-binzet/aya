@@ -1,8 +1,22 @@
 export interface IDevice {
   id: string
   name: string
+  serialno: string
   androidVersion: string
   sdkVersion: string
+  type: 'emulator' | 'device' | 'offline' | 'unauthorized' | 'unknown'
+}
+
+export interface IAvd {
+  id: string
+  name: string
+  abi: string
+  sdkVersion: string
+  memory: number
+  internalStorage: number
+  resolution: string
+  folder: string
+  pid: number
 }
 
 export interface IPackageInfo {
@@ -18,9 +32,9 @@ export interface IPackageInfo {
   lastUpdateTime: number
   minSdkVersion?: number
   targetSdkVersion?: number
-  dataSize?: number
-  cacheSize?: number
-  appSize?: number
+  dataSize: number
+  cacheSize: number
+  appSize: number
   signatures: string[]
 }
 
@@ -46,3 +60,12 @@ export type IpcGetPackageInfos = (
   deviceId: string,
   packageNames: string[]
 ) => Promise<IPackageInfo[]>
+export type IpcGetAvds = (forceRefresh?: boolean) => Promise<IAvd[]>
+export type IpcStartAvd = (avdId: string) => Promise<void>
+export type IpcStopAvd = IpcStartAvd
+export type IpcWipeAvdData = (avdId: string) => Promise<void>
+export type IpcPairDevice = (
+  host: string,
+  port: number,
+  password: string
+) => Promise<void>

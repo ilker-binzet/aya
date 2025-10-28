@@ -1,8 +1,12 @@
 import { BrowserWindow } from 'electron'
-import { getDevicesStore } from '../lib/store'
+import { getDevicesStore, getSettingsStore } from '../lib/store'
 import * as window from 'share/main/lib/window'
+import once from 'licia/once'
+import { handleEvent } from 'share/main/lib/util'
+import { IpcGetStore, IpcSetStore } from 'share/common/types'
 
 const store = getDevicesStore()
+const settingsStore = getSettingsStore()
 
 let win: BrowserWindow | null = null
 
@@ -12,12 +16,15 @@ export function showWin() {
     return
   }
 
+  initIpc()
+
   win = window.create({
     name: 'devices',
     minWidth: 960,
     minHeight: 640,
-    ...store.get('bounds'),
-    onSavePos: () => window.savePos(win, store),
+    width: 960,
+    height: 640,
+    customTitlebar: !settingsStore.get('useNativeTitlebar'),
   })
 
   win.on('close', () => {
@@ -27,3 +34,10 @@ export function showWin() {
 
   window.loadPage(win, { page: 'devices' })
 }
+
+const initIpc = once(() => {
+  handleEvent('setDevicesStore', <IpcSetStore>(
+    ((name, val) => store.set(name, val))
+  ))
+  handleEvent('getDevicesStore', <IpcGetStore>((name) => store.get(name)))
+})

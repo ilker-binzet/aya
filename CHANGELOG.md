@@ -1,3 +1,73 @@
+## v1.13.0 (9 Oct 2025)
+
+* feat: show storage usage in application list view [#73](https://github.com/liriliri/aya/issues/73)
+* feat: optimize file path bar
+* feat: add more mouse action to screencast [#124](https://github.com/liriliri/aya/pull/124)
+* feat: support brazilian portuguese [#118](https://github.com/liriliri/aya/pull/118)
+
+## v1.12.2 (30 Jul 2025)
+
+* fix: macOS app is damaged
+
+## v1.12.1 (12 Jun 2025)
+
+* fix: stay awake when screencasting [#95](https://github.com/liriliri/aya/issues/95)
+* fix: root detection
+
+## v1.12.0 (7 Jun 2025)
+
+* feat: show enabled status in application list mode [#90](https://github.com/liriliri/aya/issues/90)
+* feat: support viewing the /data/ directory [#89](https://github.com/liriliri/aya/issues/89)
+* feat: support ANDROID_AVD_HOME env variable [#87](https://github.com/liriliri/aya/issues/87)
+* fix: android 15 fps not working
+
+## v1.11.0 (27 May 2025)
+
+* feat: avd manager stop avd
+* feat: avd manager wipe data
+* feat: restart adb server
+* feat: pair new device
+* fix: window position on multi-display desktop [#84](https://github.com/liriliri/aya/issues/84)
+* fix: get packages in multi-user scenarios [#79](https://github.com/liriliri/aya/issues/79)
+
+## v1.10.0 (19 May 2025)
+
+* feat: AVD manager
+* fix: screencast app switch button
+* fix: screencast key mapping [#80](https://github.com/liriliri/aya/issues/80)
+
+## v1.9.0 (14 May 2025)
+
+* feat: optimize the shell panel ui
+* feat: screencast clipboard sync
+* feat: start wireless mode
+* feat: show serialno in device manager
+* feat: device manager screenshot
+
+## v1.8.0 (7 May 2025)
+
+* feat: use native titlebar [#68](https://github.com/liriliri/aya/issues/68)
+* feat: screen recording [#51](https://github.com/liriliri/aya/issues/51)
+* feat: support opening apk file
+
+## v1.7.1 (3 May 2025)
+
+* fix: quit shortcut [#61](https://github.com/liriliri/aya/issues/61)
+* fix: russian missing translation [#63](https://github.com/liriliri/aya/pull/63)
+* fix: table header rendering error when resized
+
+## v1.7.0 (17 Apr 2025)
+
+* feat: webview use local inspector
+* feat: scrcpy input text
+* feat: support macos intel chip [#59](https://github.com/liriliri/aya/issues/59)
+
+## v1.6.0 (9 Apr 2025)
+
+* feat: adjust theme color scheme
+* feat: support french [#56](https://github.com/liriliri/aya/pull/56)
+* feat: keep remote devices history [#47](https://github.com/liriliri/aya/issues/47)
+
 ## v1.5.0 (30 Mar 2025)
 
 * feat: layout xpath

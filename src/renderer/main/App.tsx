@@ -10,20 +10,14 @@ import Application from './components/application/Application'
 import File from './components/file/File'
 import Layout from './components/layout/Layout'
 import Style from './App.module.scss'
-import LunaModal from 'luna-modal/react'
 import Modal from 'luna-modal'
 import { t } from '../../common/util'
 import { useState, useEffect, PropsWithChildren, FC } from 'react'
-import { createPortal } from 'react-dom'
 import store from './store'
 import { observer } from 'mobx-react-lite'
-import icon from '../assets/icon.png'
 
 export default observer(function App() {
-  const [aboutVisible, setAboutVisible] = useState(false)
-
   useEffect(() => {
-    const offShowAbout = main.on('showAbout', () => setAboutVisible(true))
     const offUpdateError = main.on('updateError', () => {
       Modal.alert(t('updateErr'))
     })
@@ -37,7 +31,6 @@ export default observer(function App() {
       }
     })
     return () => {
-      offShowAbout()
       offUpdateError()
       offUpdateNotAvailable()
       offUpdateAvailable()
@@ -47,7 +40,7 @@ export default observer(function App() {
   return (
     <>
       <Toolbar />
-      {store.isInit && (
+      {store.ready && (
         <div className={Style.workspace}>
           <div
             className={Style.panels}
@@ -85,23 +78,6 @@ export default observer(function App() {
             </Panel>
           </div>
         </div>
-      )}
-      {createPortal(
-        <LunaModal
-          title={t('aboutAya')}
-          visible={aboutVisible}
-          width={400}
-          onClose={() => setAboutVisible(false)}
-        >
-          <div className={Style.about}>
-            <img className={Style.icon} src={icon} />
-            <div>AYA</div>
-            <div>
-              {t('version')} {AYA_VERSION}
-            </div>
-          </div>
-        </LunaModal>,
-        document.body
       )}
     </>
   )

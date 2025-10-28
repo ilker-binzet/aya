@@ -1,6 +1,6 @@
 import { observer } from 'mobx-react-lite'
 import Style from './Overview.module.scss'
-import { useEffect, useState } from 'react'
+import { JSX, useEffect, useState } from 'react'
 import isEmpty from 'licia/isEmpty'
 import fileSize from 'licia/fileSize'
 import types from 'licia/types'
@@ -42,8 +42,7 @@ export default observer(function Overview() {
       setIsLoading(true)
       const overview = await main.getOverview(device.id)
       setOverview(overview)
-      // eslint-disable-next-line
-    } catch (e) {
+    } catch {
       notify(t('commonErr'), { icon: 'error' })
     }
 
@@ -69,7 +68,7 @@ export default observer(function Overview() {
           {item(t('model'), overview.model, 'model')}
         </div>
         <div className={Style.row}>
-          {item(t('serialNum'), overview.serialNum, 'serial-number')}
+          {item(t('serialno'), overview.serialno, 'serial-number')}
           {item(
             t('androidVersion'),
             `Android ${device.androidVersion} (API ${device.sdkVersion})`,
@@ -138,10 +137,14 @@ export default observer(function Overview() {
     try {
       await main.root(device.id)
       setTimeout(() => refresh(), 2000)
-      // eslint-disable-next-line
-    } catch (e) {
+    } catch {
       notify(t('rootModeErr'), { icon: 'error' })
     }
+  }
+
+  async function restartAdbServer() {
+    await main.restartAdbServer()
+    notify(t('adbServerRestarted'), { icon: 'success' })
   }
 
   return (
@@ -151,6 +154,11 @@ export default observer(function Overview() {
           icon="terminal"
           title={t('adbCli')}
           onClick={() => main.openAdbCli()}
+        />
+        <ToolbarIcon
+          icon="reset"
+          title={t('restartAdbServer')}
+          onClick={restartAdbServer}
         />
         <ToolbarIcon
           icon="unlock"

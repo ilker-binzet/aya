@@ -1,11 +1,13 @@
 import { observer } from 'mobx-react-lite'
 import Style from './Webview.module.scss'
 import LunaToolbar, {
+  LunaToolbarCheckbox,
   LunaToolbarInput,
+  LunaToolbarSeparator,
   LunaToolbarSpace,
   LunaToolbarText,
 } from 'luna-toolbar/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { t } from '../../../../common/util'
 import toEl from 'licia/toEl'
 import LunaDataGrid from 'luna-data-grid/react'
@@ -13,6 +15,8 @@ import map from 'licia/map'
 import className from 'licia/className'
 import store from '../../store'
 import ToolbarIcon from 'share/renderer/components/ToolbarIcon'
+import DataGrid from 'luna-data-grid'
+import { useWindowResize } from 'share/renderer/lib/hooks'
 
 export default observer(function Webview() {
   const [webviews, setWebviews] = useState<any[]>([])
@@ -22,7 +26,7 @@ export default observer(function Webview() {
     label: '',
     pid: 0,
   })
-  const [listHeight, setListHeight] = useState(0)
+  const dataGridRef = useRef<DataGrid>(null)
   const [filter, setFilter] = useState('')
 
   const { device } = store
@@ -61,8 +65,9 @@ export default observer(function Webview() {
                 })
               )
             }
-            /* eslint-disable @typescript-eslint/no-unused-vars, no-empty */
-          } catch (e) {}
+          } catch {
+            // ignore
+          }
         }
       }
       if (!destroyed) {
@@ -72,20 +77,12 @@ export default observer(function Webview() {
 
     getWebviews()
 
-    function resize() {
-      const height = window.innerHeight - 89
-      setListHeight(height)
-    }
-    resize()
-
-    window.addEventListener('resize', resize)
-
     return () => {
       destroyed = true
-
-      window.removeEventListener('resize', resize)
     }
   }, [])
+
+  useWindowResize(() => dataGridRef.current?.fit())
 
   return (
     <div className={className('panel-with-toolbar', Style.conatiner)}>
@@ -98,12 +95,28 @@ export default observer(function Webview() {
         />
         <LunaToolbarText text={topPackage ? topPackage.label : ''} />
         <LunaToolbarSpace />
+        <LunaToolbarCheckbox
+          keyName="useLocalInspector"
+          value={store.webview.useLocalInspector}
+          label={t('useLocalInspector')}
+          onChange={(val) => {
+            store.webview.set('useLocalInspector', val)
+          }}
+        />
         <ToolbarIcon
           disabled={selected === null}
           icon="debug"
           title={t('inspect')}
-          onClick={() => main.openWindow(selected.devtoolsFrontendUrl)}
+          onClick={() => {
+            let url = selected.devtoolsFrontendUrl
+            if (store.webview.useLocalInspector) {
+              url = 'devtools://devtools/bundled/inspector.html'
+              url += `?ws=${selected.webSocketDebuggerUrl.replace('ws://', '')}`
+            }
+            main.openWindow(url, 'devtools')
+          }}
         />
+        <LunaToolbarSeparator />
         <ToolbarIcon
           disabled={selected === null}
           icon="browser"
@@ -119,9 +132,11 @@ export default observer(function Webview() {
         columns={columns}
         data={webviews}
         selectable={true}
-        minHeight={listHeight}
-        maxHeight={listHeight}
         uniqueId="id"
+        onCreate={(dataGrid) => {
+          dataGridRef.current = dataGrid
+          dataGrid.fit()
+        }}
       />
     </div>
   )

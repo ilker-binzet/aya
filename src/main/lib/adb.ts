@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import Adb, { Client, Device } from '@devicefarmer/adbkit'
 import androidDeviceList from 'android-device-list'
-import { resolveUnpack, handleEvent } from 'share/main/lib/util'
+import { resolveResources, handleEvent } from 'share/main/lib/util'
 import map from 'licia/map'
 import types from 'licia/types'
 import filter from 'licia/filter'
@@ -16,7 +16,7 @@ import { getSettingsStore } from './store'
 import isWindows from 'licia/isWindows'
 import isEmpty from 'licia/isEmpty'
 import * as base from './adb/base'
-import { shell } from './adb/base'
+import { shell, getAdbPath, spawnAdb, isRooted } from './adb/base'
 import * as logcat from './adb/logcat'
 import * as shellAdb from './adb/shell'
 import * as server from './adb/server'
@@ -28,10 +28,15 @@ import * as webview from './adb/webview'
 import * as port from './adb/port'
 import { getCpuLoads, getCpus } from './adb/cpu'
 import log from 'share/common/log'
-import { IpcDumpWindowHierarchy, IpcGetDevices } from '../../common/types'
+import {
+  IpcDumpWindowHierarchy,
+  IpcGetDevices,
+  IpcPairDevice,
+} from '../../common/types'
 import path from 'node:path'
 import childProcess from 'node:child_process'
 import isMac from 'licia/isMac'
+import sleep from 'licia/sleep'
 
 const logger = log('adb')
 
@@ -41,7 +46,10 @@ let client: Client
 
 const getDevices: IpcGetDevices = async function () {
   let devices = await client.listDevices()
-  devices = filter(devices, (device: Device) => device.type !== 'offline')
+  devices = filter(
+    devices,
+    (device: Device) => device.type === 'emulator' || device.type === 'device'
+  )
 
   return Promise.all(
     map(devices, async (device: Device) => {
@@ -55,6 +63,8 @@ const getDevices: IpcGetDevices = async function () {
 
       return {
         id: device.id,
+        type: device.type,
+        serialno: properties['ro.serialno'] || '',
         name,
         androidVersion: properties['ro.build.version.release'],
         sdkVersion: properties['ro.build.version.sdk'],
@@ -67,17 +77,37 @@ async function getOverview(deviceId: string) {
   const device = await client.getDevice(deviceId)
   const properties = await device.getProperties()
   const cpus = await getCpus(deviceId)
-  const [kernelVersion, fontScale, wifi, id] = await shell(deviceId, [
+  const [kernelVersion, fontScale, wifi] = await shell(deviceId, [
     'uname -r',
     'settings get system font_scale',
     'dumpsys wifi',
-    'id',
   ])
 
   let ssidMatch = wifi.match(/mWifiInfo\s+SSID: "?(.+?)"?,/)
   if (ssidMatch && ssidMatch[1] === '<unknown ssid>') {
     ssidMatch = null
   }
+
+  return {
+    name: getMarketName(properties) || properties['ro.product.name'],
+    processor: properties['ro.product.board'] || '',
+    abi: properties['ro.product.cpu.abi'],
+    brand: properties['ro.product.brand'],
+    model: properties['ro.product.model'],
+    serialno: properties['ro.serialno'] || '',
+    cpuNum: cpus.length,
+    kernelVersion,
+    fontScale: fontScale === 'null' ? 0 : toNum(fontScale),
+    wifi: ssidMatch ? ssidMatch[1] : '',
+    root: await isRooted(deviceId),
+    ...(await getIpAndMac(deviceId)),
+    ...(await getStorage(deviceId)),
+    ...(await getMemory(deviceId)),
+    ...(await getScreen(deviceId)),
+  }
+}
+
+async function getIpAndMac(deviceId: string) {
   let ip = ''
   let mac = ''
   const wlan0 = await shell(deviceId, 'ip addr show wlan0')
@@ -92,25 +122,9 @@ async function getOverview(deviceId: string) {
     mac = macMatch[1]
   }
 
-  const root = contain(id, 'uid=0')
-
   return {
-    name: getMarketName(properties) || properties['ro.product.name'],
-    processor: properties['ro.product.board'] || '',
-    abi: properties['ro.product.cpu.abi'],
-    brand: properties['ro.product.brand'],
-    model: properties['ro.product.model'],
-    serialNum: properties['ro.serialno'] || '',
-    cpuNum: cpus.length,
-    kernelVersion,
-    fontScale: fontScale === 'null' ? 0 : toNum(fontScale),
-    wifi: ssidMatch ? ssidMatch[1] : '',
     ip,
-    root,
     mac,
-    ...(await getStorage(deviceId)),
-    ...(await getMemory(deviceId)),
-    ...(await getScreen(deviceId)),
   }
 }
 
@@ -281,12 +295,19 @@ async function disconnectDevice(host: string, port?: number) {
   await client.disconnect(host, port)
 }
 
+const pairDevice: IpcPairDevice = async function (host, port, password) {
+  const { stdout } = await spawnAdb(['pair', `${host}:${port}`, password])
+  if (!contain(stdout, 'Successfully')) {
+    throw new Error(`Pair device failed: ${stdout}`)
+  }
+}
+
 async function inputKey(deviceId: string, keyCode: number) {
   await base.shell(deviceId, `input keyevent ${keyCode}`)
 }
 
 async function openAdbCli() {
-  let cwd = resolveUnpack('adb')
+  let cwd = resolveResources('adb')
   const adbPath = settingsStore.get('adbPath')
   if (!isStrBlank(adbPath) && fs.existsSync(adbPath)) {
     cwd = path.dirname(adbPath)
@@ -319,14 +340,21 @@ async function root(deviceId: string) {
   await device.root()
 }
 
+async function startWireless(deviceId: string) {
+  const device = await client.getDevice(deviceId)
+  const { ip } = await getIpAndMac(deviceId)
+  const port = await device.tcpip(5555)
+  await sleep(500)
+  await connectDevice(ip, port)
+}
+
+async function restartAdbServer() {
+  await client.kill()
+  await client.version()
+}
+
 export async function init() {
   logger.info('init')
-
-  let bin = isWindows ? resolveUnpack('adb/adb.exe') : resolveUnpack('adb/adb')
-  const adbPath = settingsStore.get('adbPath')
-  if (adbPath === 'adb' || (!isStrBlank(adbPath) && fs.existsSync(adbPath))) {
-    bin = adbPath
-  }
 
   app.on('will-quit', async () => {
     if (settingsStore.get('killAdbWhenExit')) {
@@ -336,17 +364,31 @@ export async function init() {
   })
 
   client = Adb.createClient({
-    bin,
+    bin: getAdbPath(),
   })
-  client.trackDevices().then((tracker) => {
-    tracker.on('add', onDeviceChange)
-    tracker.on('remove', onDeviceChange)
-    tracker.on('end', () => logger.info('tracker end'))
-  })
+  async function track() {
+    logger.info('track devices')
+    try {
+      const tracker = await client.trackDevices()
+      tracker.on('add', onDeviceChange)
+      tracker.on('remove', onDeviceChange)
+      tracker.on('error', () => {
+        logger.error('tracker error')
+      })
+      tracker.on('end', async () => {
+        logger.info('tracker end')
+        await sleep(2000)
+        track()
+      })
+    } catch (e) {
+      logger.error('track error', e)
+    }
+  }
   function onDeviceChange() {
     logger.info('device change')
-    setTimeout(() => window.sendTo('main', 'changeDevice'), 2000)
+    setTimeout(() => window.sendAll('changeDevice'), 2000)
   }
+  track()
 
   base.init(client)
   logcat.init(client)
@@ -372,4 +414,7 @@ export async function init() {
   handleEvent('openAdbCli', openAdbCli)
   handleEvent('dumpWindowHierarchy', dumpWindowHierarchy)
   handleEvent('root', root)
+  handleEvent('startWireless', startWireless)
+  handleEvent('restartAdbServer', restartAdbServer)
+  handleEvent('pairDevice', pairDevice)
 }

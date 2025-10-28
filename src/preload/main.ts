@@ -1,13 +1,18 @@
 import {
   IpcDumpWindowHierarchy,
   IpcForward,
+  IpcGetAvds,
   IpcGetDevices,
   IpcGetFps,
   IpcGetPackageInfos,
   IpcListForwards,
   IpcListReverses,
+  IpcPairDevice,
   IpcReverse,
   IpcSetScreencastAlwaysOnTop,
+  IpcStartAvd,
+  IpcStopAvd,
+  IpcWipeAvdData,
 } from '../common/types'
 import { ipcRenderer } from 'electron'
 import { IpcGetStore, IpcSetStore } from 'share/common/types'
@@ -20,6 +25,8 @@ export default Object.assign(mainObj, {
   setMainStore: invoke<IpcSetStore>('setMainStore'),
   getScreencastStore: invoke<IpcGetStore>('getScreencastStore'),
   setScreencastStore: invoke<IpcSetStore>('setScreencastStore'),
+  getDevicesStore: invoke<IpcGetStore>('getDevicesStore'),
+  setDevicesStore: invoke<IpcSetStore>('setDevicesStore'),
   setScreencastAlwaysOnTop: invoke<IpcSetScreencastAlwaysOnTop>(
     'setScreencastAlwaysOnTop'
   ),
@@ -129,7 +136,14 @@ export default Object.assign(mainObj, {
   listReverses: invoke<IpcListReverses>('listReverses'),
   forward: invoke<IpcForward>('forward'),
   reverse: invoke<IpcReverse>('reverse'),
+  startWireless: invoke('startWireless'),
   openAdbCli: invoke('openAdbCli'),
   dumpWindowHierarchy: invoke<IpcDumpWindowHierarchy>('dumpWindowHierarchy'),
   root: invoke('root'),
+  getAvds: invoke<IpcGetAvds>('getAvds'),
+  startAvd: invoke<IpcStartAvd>('startAvd'),
+  stopAvd: invoke<IpcStopAvd>('stopAvd'),
+  wipeAvdData: invoke<IpcWipeAvdData>('wipeAvdData'),
+  restartAdbServer: invoke('restartAdbServer'),
+  pairDevice: invoke<IpcPairDevice>('pairDevice'),
 })

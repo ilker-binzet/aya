@@ -1,9 +1,11 @@
 import { lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { t, i18n } from '../common/util'
-import { isDev, getPlatform } from 'share/common/util'
-import hotKey from 'licia/hotkey'
 import getUrlParam from 'licia/getUrlParam'
+import LunaModal from 'luna-modal'
+import LunaFileList from 'luna-file-list'
+import log from 'share/common/log'
+import 'share/renderer/main'
 import 'luna-toolbar/css'
 import 'luna-tab/css'
 import 'luna-modal/css'
@@ -18,17 +20,15 @@ import 'luna-file-list/css'
 import 'luna-command-palette/css'
 import 'luna-virtual-list/css'
 import 'luna-dom-viewer/css'
+import 'luna-otp-input/css'
+import 'luna-split-pane/css'
+import 'luna-path-bar/css'
+import 'share/renderer/luna.scss'
 import './luna.scss'
-import './icon.css'
 import 'share/renderer/main.scss'
 import './main.scss'
-import LunaModal from 'luna-modal'
-import LunaFileList from 'luna-file-list'
-import log from 'share/common/log'
+import './icon.css'
 
-if (!isDev()) {
-  log.setLevel('info')
-}
 const logger = log('renderer')
 logger.info('start')
 
@@ -45,6 +45,10 @@ function renderApp() {
       App = lazy(() => import('share/renderer/terminal/App.js') as Promise<any>)
       title = t('terminal')
       break
+    case 'process':
+      App = lazy(() => import('share/renderer/process/App.js') as Promise<any>)
+      title = t('processManager')
+      break
     case 'screencast':
       App = lazy(() => import('./screencast/App.js') as Promise<any>)
       title = t('screencast')
@@ -53,16 +57,19 @@ function renderApp() {
       App = lazy(() => import('./devices/App.js') as Promise<any>)
       title = t('deviceManager')
       break
+    case 'avd':
+      App = lazy(() => import('./avd/App.js') as Promise<any>)
+      title = t('avdManager')
+      break
+    case 'about':
+      App = lazy(() => import('share/renderer/about/App.js') as Promise<any>)
+      title = t('aboutAya')
+      break
   }
 
   preload.setTitle(title)
 
   createRoot(container).render(<App />)
-}
-
-if (isDev()) {
-  hotKey.on('f5', () => location.reload())
-  hotKey.on('f12', () => main.toggleDevTools())
 }
 
 ;(async function () {
@@ -84,8 +91,6 @@ if (isDev()) {
     file: t('file'),
     permissions: t('permissions'),
   })
-
-  document.body.classList.add(`platform-${getPlatform()}`)
 
   renderApp()
 })()

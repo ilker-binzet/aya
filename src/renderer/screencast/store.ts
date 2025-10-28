@@ -1,6 +1,6 @@
 import BaseStore from 'share/renderer/store/BaseStore'
 import { IDevice } from '../../common/types'
-import { makeObservable, observable, runInAction, toJS } from 'mobx'
+import { action, makeObservable, observable, runInAction, toJS } from 'mobx'
 import ScrcpyClient from './lib/ScrcpyClient'
 import { ScrcpyOptions3_1 } from '@yume-chan/scrcpy'
 import defaults from 'licia/defaults'
@@ -10,6 +10,8 @@ class Store extends BaseStore {
   scrcpyClient!: ScrcpyClient
   alwaysOnTop = false
   settings = defaultSettings
+  screenOff = false
+  recording = false
   constructor() {
     super()
 
@@ -17,6 +19,13 @@ class Store extends BaseStore {
       alwaysOnTop: observable,
       settings: observable,
       device: observable,
+      screenOff: observable,
+      recording: observable,
+      setAlwaysOnTop: action,
+      turnOnScreen: action,
+      turnOffScreen: action,
+      startRecording: action,
+      stopRecording: action,
     })
 
     this.init()
@@ -27,17 +36,32 @@ class Store extends BaseStore {
     main.setScreencastStore('alwaysOnTop', val)
     main.setScreencastAlwaysOnTop(val)
   }
+  turnOnScreen() {
+    this.screenOff = false
+    this.scrcpyClient.turnOnScreen()
+  }
+  turnOffScreen() {
+    this.screenOff = true
+    this.scrcpyClient.turnOffScreen()
+  }
+  startRecording() {
+    this.recording = true
+    this.scrcpyClient.startRecording()
+  }
+  stopRecording() {
+    this.recording = false
+    this.scrcpyClient.stopRecording()
+  }
   async setDevice(device: IDevice | null) {
     if (device === null) {
       main.closeScreencast()
     } else {
-      const deviceSettings = (await main.getScreencastStore('settings')) || {}
+      const deviceSettings = await main.getScreencastStore('settings')
       let settings = defaultSettings
       if (deviceSettings[device.id]) {
         settings = deviceSettings[device.id]
         defaults(settings, defaultSettings)
       }
-      this.settings = settings
 
       this.scrcpyClient = new ScrcpyClient(
         device.id,
@@ -45,7 +69,8 @@ class Store extends BaseStore {
           audio: true,
           videoBitRate: settings.videoBitRate,
           maxSize: settings.maxSize,
-          clipboardAutosync: false,
+          clipboardAutosync: true,
+          stayAwake: true,
         })
       )
       this.scrcpyClient.on('close', () => {
@@ -54,12 +79,16 @@ class Store extends BaseStore {
         }
       })
 
-      runInAction(() => (this.device = device))
+      runInAction(() => {
+        this.settings = settings
+        this.screenOff = false
+        this.device = device
+      })
     }
   }
   async setSettings(name: string, val: any) {
     runInAction(() => (this.settings[name] = val))
-    const deviceSettings = (await main.getScreencastStore('settings')) || {}
+    const deviceSettings = await main.getScreencastStore('settings')
     deviceSettings[this.device.id] = toJS(this.settings)
     main.setScreencastStore('settings', deviceSettings)
   }
@@ -77,6 +106,10 @@ class Store extends BaseStore {
       if (name === 'device') {
         this.setDevice(val)
       }
+    })
+    main.on('focusWin', async () => {
+      const text = await navigator.clipboard.readText()
+      this.scrcpyClient.setClipboard(text)
     })
   }
 }
